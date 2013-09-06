@@ -1,6 +1,9 @@
 pluginName = "richAutocomplete"
 defaults =
+
 	containderWidth: false
+
+
 	initialValue: false
 	
 	# events #
@@ -8,21 +11,41 @@ defaults =
 	onClear: false
 	onSet: false
 	onBlur: false
-	defaultTerm: "label"
+	onFocus: false
 
+	# required properties #
 	provider: false
-	minLength: 3
+	defaultLabelTemplate: '<div class="-label"><%= label %></div>'
+
+	# additional properties #
+	defaultTerm: "label"
+	minLength: 1
 	loadingText: "Loading..."
 	notFoundText: "Nothing was found"
 	showLoading: false,
-	defaultLabelTemplate: '<span class="-label"><%= label %></span>'
 	highlightResults: true
 	maxViewedCount: false
 	placeholder: false
 	groups: null
+
+	###
+
+		groups: [
+			{
+				template: "some template"
+				header: "header",
+				groupClass: "someClass"	
+			}
+		]
+
+	###
+
+	# classes #
 	placeholderClass: "-richAutocomplete__placeholder"
 	inputClass: "-richAutocomplete__input"
 	hiddenInputClass: "-richAutocomplete__hidden-input"
+	additionalWrapperClass: ""
+	additionalItemClass: ""
 templates = 
 	listContainer: '<div class="-richAutocomplete__list-container" />'
 	list: '<div class="-richAutocomplete__list" />'
@@ -30,6 +53,8 @@ templates =
 	itemTemplate: '<div class="-richAutocomplete__list-item" />'
 	notFoundTemplate: '<div class="-richAutocomplete__not-found" />'
 	wrapperTemplate: '<div class="-richAutocomplete__wrapper"/>'
+	groupTemplate: '<div class="-richAutocomplete__item-group"></div>'
+	groupHeaderTemplate: '<div class="-richAutocomplete__item-group-header"></div>'
 
 ### Pub/Sub implementation ###
 
@@ -101,14 +126,21 @@ class Plugin
 
 	element: null,
 	options: null,
+	context: null,
 
+	###
+		Plugin constructor
+	###
 	constructor: (@element, options) ->
+		@context = @
 		@options = $.extend({}, defaults, options)
 		@_defaults = defaults
 		@_name = pluginName
 		@_init()
 
-	## /////// Events ///////// ##
+	###
+		/////////  Events  ///////////
+	###
 
 	_onInit: ->
 		if @options.onInit && typeof @options.onInit is "function"
@@ -126,32 +158,49 @@ class Plugin
 		if @options.onBlur && typeof @options.onBlur is "function"
 			@options.onBlur(@_getPublicApi())
 
+	_onFocus: ->
+		if @options.onFocus && typeof @options.onFocus is "function"
+			@options.onFocus(@_getPublicApi())
+
 	_getPublicApi: ->
 		{
 			element: @options.element
 			selectedItem: @getSelectedItemElem()
 			setValue: @setValue.bind(@)
-			clearValue: @clearValue.bind(@)
-			getValue: @getValue.bind(@)
-			moveToNextInList: @moveToNextInList.bind(@)
-			moveToPrevInList: @moveToPrevInList.bind(@)
-			search: @_search.bind(@)
+			clearValue: $.proxy(@clearValue, @)
+			getValue: $.proxy(@getValue, @)
+			moveToNextInList: $.proxy(@moveToNextInList, @)
+			moveToPrevInList: $.proxy(@moveToPrevInList, @)
+			search: $.proxy(@_search.bind, @)
+			changePlaceholder: $.proxy(@changePlaceholder, @)
+			setProvider: $.proxy(@setProvider, @)
 		}
 
-	## /////// Logic /////////// ##
+	### 
+		/////// Public methods /////////// 
+	###
 
 	setValue: (data) ->
+		@_removePlaceholder()
 		@options.hiddenElement.val(JSON.stringify(data)).trigger("change")
 		@options.element.val(data[@options.defaultTerm])
 		@options.textVal = data[@options.defaultTerm]
 		@options.currentData = data
 		@_onSet()
 
+	changePlaceholder: (placeholder) ->
+		@options.placeholder = placeholder
+		@_setPlaceholder()
+
+	setProvider: (provider) ->
+		@options.provider = provider
+
 	clearValue: ->
 		@options.textVal = ''
 		@options.hiddenElement.val('').trigger("change")
 		@options.element.val('')
 		@options.currentData = null
+		@_setPlaceholder() unless @options.element.is(":focus")
 		@_onClear()
 
 	getValue: ->
@@ -164,7 +213,7 @@ class Plugin
 
 	moveToNextInList: ->
 		resultsCount = @options.aclist.currentList.length
-		if resultsCount > 1 || @options.aclist.currentIndex is -1
+		if resultsCount > 1 or (@options.aclist.currentIndex is -1 and resultsCount > 0)
 			if @options.aclist.currentSelectedItem
 				@options.aclist.currentSelectedItem.deselect()
 			newIndex = @options.aclist.currentIndex + 1
@@ -177,7 +226,7 @@ class Plugin
 
 	moveToPrevInList: ->
 		resultsCount = @options.aclist.currentList.length
-		if resultsCount > 1 || @options.aclist.currentIndex is -1
+		if resultsCount > 1 or (@options.aclist.currentIndex is -1 and resultsCount > 0)
 			if @options.aclist.currentSelectedItem
 				@options.aclist.currentSelectedItem.deselect()
 			newIndex = @options.aclist.currentIndex - 1
@@ -186,6 +235,28 @@ class Plugin
 			@options.aclist.currentSelectedItem = @options.aclist.currentList[newIndex]
 			@options.aclist.currentIndex = newIndex
 			@options.aclist.currentSelectedItem.select()
+
+
+	###
+		//////  Private methods  ///////
+	###
+
+
+	_init: ->
+		@_setSettings()
+		@_createElem()
+
+		if typeof @options.initialValue is "function"
+			@options.initialValue().done((initialValue) =>
+				@setValue(initialValue)
+				@_bindEvents()
+				@_onInit()
+			)
+			return
+		else if typeof @options.initialValue is "object"
+			@setValue(@options.initialValue)
+		@_bindEvents()
+		@_onInit()
 
 	_closeContainer: ->
 		@options.aclist.currentList = []
@@ -227,24 +298,6 @@ class Plugin
 				@_onLoadList(response)
 		)
 
-
-	_init: ->
-		@_setSettings()
-		@_createElem()
-
-		if typeof @options.initialValue is "function"
-			@options.initialValue().done((initialValue) =>
-				@setValue(initialValue)
-				@_bindEvents()
-				@_onInit()
-			)
-			return
-		else if typeof @options.initialValue is "object"
-			@setValue(@options.initialValue)
-		@_bindEvents()
-		@_onInit()
-
-
 	_startIntervalCheck: ->
 		@options.intervalCheck = setInterval( =>
 			newValue = @options.element.val()
@@ -275,7 +328,7 @@ class Plugin
 	_createElem: ->
 		$element = @options.element
 
-		@options.aclist.wrapper = $element.wrap(templates.wrapperTemplate)
+		@options.aclist.wrapper = $element.wrap(templates.wrapperTemplate).addClass(@options.additionalWrapperClass)
 
 		# create hidden input below current
 		@options.hiddenElement = $("<input type='hidden' name='" + $element.attr("name") + "' />")
@@ -340,6 +393,7 @@ class Plugin
 			"focus.richAutocomplete": =>
 				@_removePlaceholder()
 				@_startIntervalCheck()
+				@_onFocus()
 
 			"blur.richAutocomplete" : =>
 				@_stopIntervalCheck()
@@ -349,7 +403,6 @@ class Plugin
 						@setValue(@options.currentData)
 					else
 						@clearValue()
-						@_setPlaceholder()
 					@_closeContainer()
 					@_onBlur()
 
@@ -394,20 +447,24 @@ class ListGroup
 		@options = @plugin.options
 
 	render: ->
-		template
+		if @data.length is 0
+			return
 		if @groupIndex is -1
-			template = @options.defaultLabelTemplate
+			itemTemplate = @options.defaultLabelTemplate
 			header = null
 		else
-			template = @options.groups[@groupIndex].template
+			itemTemplate = @options.groups[@groupIndex].template
 			header = @options.groups[@groupIndex].header
-		if header and @data.length > 0
-			@options.aclist.list.append($(header))
-
+		groupContainer = $(templates.groupTemplate)
+		if @groupIndex isnt -1
+			groupContainer.addClass(@options.groups[@groupIndex].groupClass)
+		if header
+			headerContainer = $(templates.groupHeaderTemplate).html($(header))
+			groupContainer.append(headerContainer)
 		if @options.maxViewedCount
 			@data = _.first(@data, @options.maxViewedCount)
 		_.each(@data, (itemData, index) =>
-			listItem = new ListItem(itemData, index, @options, template)
+			listItem = new ListItem(itemData, index, @options, itemTemplate, groupContainer)
 			listItem.on("click.richAutocomplete", (event, item) => 
 				@plugin.setValue(item.data)
 				@plugin._closeContainer()
@@ -421,21 +478,21 @@ class ListGroup
 			listItem.render()
 			@options.aclist.currentList.push(listItem)
 		)
+		@options.aclist.list.append(groupContainer)
 
 
 
 class ListItem
-	constructor: (@data, @index, @options, @template) ->
+	constructor: (@data, @index, @options, @template, @parent) ->
 		_.extend(@, getPubSub())
 	render: ->
 		if typeof @template is "function"
 			template = @template(@data, @index)
 		else
 			template = @template
-		parent = @options.aclist.list
-		itemContainer = $(templates.itemTemplate)
+		itemContainer = $(templates.itemTemplate).addClass(@options.additionalItemClass)
 		$(_.template(template, @data)).appendTo(itemContainer)
-		itemContainer.appendTo(parent)
+		itemContainer.appendTo(@parent)
 		@element = itemContainer
 
 		if @options.highlightResults
@@ -465,12 +522,10 @@ class ListItem
 
 
 $.extend(
-	richAutocompleteDataProvider: (data, term = null, comparator = null) ->
+	richAutocompleteDataProvider: (data, comparator = null) ->
 		throw "data should be array" unless _.isArray(data)
-		if term == null
-			term = "label"
 		if comparator == null
-			comparator = (dataItem, value) ->
+			comparator = (dataItem, value, groupIndex, term = "label") ->
 				dataItem[term].toLowerCase().indexOf(value.toLowerCase()) >= 0
 		return (value) ->
 			deferred = new $.Deferred()
@@ -486,7 +541,7 @@ $.extend(
 				return deferred.resolve(result)
 			else
 				result = _.filter(data, (item) ->
-					comparator(item, value)
+					comparator(item, value, -1)
 				)
 				return deferred.resolve(result) 			
 
@@ -494,7 +549,7 @@ $.extend(
 );
 
 $.extend(
-	richAutocompleteAjaxProvider: (url, term = "term", type = "get", additionalData = {}) ->
+	richAutocompleteAjaxProvider: (url, additionalData = {}, term = "term", type = "get") ->
 		return (value) ->
 			if typeof additionalData is "function"
 				additionalData = additionalData()
@@ -508,6 +563,27 @@ $.extend(
 			)
 )
 
+
+$.extend(
+	richAutocompleteAjaxWithCacheProvider: (url, additionalData = {}, term = "term", type = "get") ->
+		cache = []
+		return (value) ->
+			console.log(cache)
+			deferred = new $.Deferred()
+			if cache[value]
+				deferred.resolve(cache[value])
+			else
+				$.richAutocompleteAjaxProvider(url, additionalData, term, type)(value)
+					.done((response) ->
+						cache[value] = response unless cache[value]
+						deferred.resolve(response)
+					)
+					.fail((response) ->
+						deferred.reject(response)
+					)
+			deferred.promise()
+)
+
 $.fn[pluginName] = (options) ->
 	if typeof arguments[0] is "string"
 		methodName = arguments[0]
@@ -516,7 +592,8 @@ $.fn[pluginName] = (options) ->
 		@each( ->
 			if $.data(this, "plugin_" + pluginName) and (typeof $.data(this, "plugin_" + pluginName)[methodName] is "function")
 				if (methodName isnt "") && (methodName.charAt(0) isnt "_")
-					returnVal = $.data(this, "plugin_" + pluginName)[methodName].apply(this, args)
+					plugin = $.data(this, "plugin_" + pluginName)
+					returnVal =  plugin[methodName].apply(plugin.context, args)
 				else
 					throw new Error("Method " + methodName + " is private method of jQuery." + pluginName);
 			else

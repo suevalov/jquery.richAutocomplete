@@ -10,20 +10,34 @@
     onClear: false,
     onSet: false,
     onBlur: false,
-    defaultTerm: "label",
+    onFocus: false,
     provider: false,
-    minLength: 3,
+    defaultLabelTemplate: '<div class="-label"><%= label %></div>',
+    defaultTerm: "label",
+    minLength: 1,
     loadingText: "Loading...",
     notFoundText: "Nothing was found",
     showLoading: false,
-    defaultLabelTemplate: '<span class="-label"><%= label %></span>',
     highlightResults: true,
     maxViewedCount: false,
     placeholder: false,
     groups: null,
+    /*
+    
+        groups: [
+          {
+            template: "some template"
+            header: "header",
+            groupClass: "someClass" 
+          }
+        ]
+    */
+
     placeholderClass: "-richAutocomplete__placeholder",
     inputClass: "-richAutocomplete__input",
-    hiddenInputClass: "-richAutocomplete__hidden-input"
+    hiddenInputClass: "-richAutocomplete__hidden-input",
+    additionalWrapperClass: "",
+    additionalItemClass: ""
   };
 
   templates = {
@@ -32,7 +46,9 @@
     loadingItem: '<div class="-richAutocomplete__loading" />',
     itemTemplate: '<div class="-richAutocomplete__list-item" />',
     notFoundTemplate: '<div class="-richAutocomplete__not-found" />',
-    wrapperTemplate: '<div class="-richAutocomplete__wrapper"/>'
+    wrapperTemplate: '<div class="-richAutocomplete__wrapper"/>',
+    groupTemplate: '<div class="-richAutocomplete__item-group"></div>',
+    groupHeaderTemplate: '<div class="-richAutocomplete__item-group-header"></div>'
   };
 
   /* Pub/Sub implementation*/
@@ -127,13 +143,26 @@
 
     Plugin.prototype.options = null;
 
+    Plugin.prototype.context = null;
+
+    /*
+        Plugin constructor
+    */
+
+
     function Plugin(element, options) {
       this.element = element;
+      this.context = this;
       this.options = $.extend({}, defaults, options);
       this._defaults = defaults;
       this._name = pluginName;
       this._init();
     }
+
+    /*
+        /////////  Events  ///////////
+    */
+
 
     Plugin.prototype._onInit = function() {
       if (this.options.onInit && typeof this.options.onInit === "function") {
@@ -159,20 +188,34 @@
       }
     };
 
+    Plugin.prototype._onFocus = function() {
+      if (this.options.onFocus && typeof this.options.onFocus === "function") {
+        return this.options.onFocus(this._getPublicApi());
+      }
+    };
+
     Plugin.prototype._getPublicApi = function() {
       return {
         element: this.options.element,
         selectedItem: this.getSelectedItemElem(),
         setValue: this.setValue.bind(this),
-        clearValue: this.clearValue.bind(this),
-        getValue: this.getValue.bind(this),
-        moveToNextInList: this.moveToNextInList.bind(this),
-        moveToPrevInList: this.moveToPrevInList.bind(this),
-        search: this._search.bind(this)
+        clearValue: $.proxy(this.clearValue, this),
+        getValue: $.proxy(this.getValue, this),
+        moveToNextInList: $.proxy(this.moveToNextInList, this),
+        moveToPrevInList: $.proxy(this.moveToPrevInList, this),
+        search: $.proxy(this._search.bind, this),
+        changePlaceholder: $.proxy(this.changePlaceholder, this),
+        setProvider: $.proxy(this.setProvider, this)
       };
     };
 
+    /* 
+        /////// Public methods ///////////
+    */
+
+
     Plugin.prototype.setValue = function(data) {
+      this._removePlaceholder();
       this.options.hiddenElement.val(JSON.stringify(data)).trigger("change");
       this.options.element.val(data[this.options.defaultTerm]);
       this.options.textVal = data[this.options.defaultTerm];
@@ -180,11 +223,23 @@
       return this._onSet();
     };
 
+    Plugin.prototype.changePlaceholder = function(placeholder) {
+      this.options.placeholder = placeholder;
+      return this._setPlaceholder();
+    };
+
+    Plugin.prototype.setProvider = function(provider) {
+      return this.options.provider = provider;
+    };
+
     Plugin.prototype.clearValue = function() {
       this.options.textVal = '';
       this.options.hiddenElement.val('').trigger("change");
       this.options.element.val('');
       this.options.currentData = null;
+      if (!this.options.element.is(":focus")) {
+        this._setPlaceholder();
+      }
       return this._onClear();
     };
 
@@ -202,7 +257,7 @@
     Plugin.prototype.moveToNextInList = function() {
       var newIndex, resultsCount;
       resultsCount = this.options.aclist.currentList.length;
-      if (resultsCount > 1 || this.options.aclist.currentIndex === -1) {
+      if (resultsCount > 1 || (this.options.aclist.currentIndex === -1 && resultsCount > 0)) {
         if (this.options.aclist.currentSelectedItem) {
           this.options.aclist.currentSelectedItem.deselect();
         }
@@ -219,7 +274,7 @@
     Plugin.prototype.moveToPrevInList = function() {
       var newIndex, resultsCount;
       resultsCount = this.options.aclist.currentList.length;
-      if (resultsCount > 1 || this.options.aclist.currentIndex === -1) {
+      if (resultsCount > 1 || (this.options.aclist.currentIndex === -1 && resultsCount > 0)) {
         if (this.options.aclist.currentSelectedItem) {
           this.options.aclist.currentSelectedItem.deselect();
         }
@@ -231,6 +286,29 @@
         this.options.aclist.currentIndex = newIndex;
         return this.options.aclist.currentSelectedItem.select();
       }
+    };
+
+    /*
+        //////  Private methods  ///////
+    */
+
+
+    Plugin.prototype._init = function() {
+      var _this = this;
+      this._setSettings();
+      this._createElem();
+      if (typeof this.options.initialValue === "function") {
+        this.options.initialValue().done(function(initialValue) {
+          _this.setValue(initialValue);
+          _this._bindEvents();
+          return _this._onInit();
+        });
+        return;
+      } else if (typeof this.options.initialValue === "object") {
+        this.setValue(this.options.initialValue);
+      }
+      this._bindEvents();
+      return this._onInit();
     };
 
     Plugin.prototype._closeContainer = function() {
@@ -283,24 +361,6 @@
       });
     };
 
-    Plugin.prototype._init = function() {
-      var _this = this;
-      this._setSettings();
-      this._createElem();
-      if (typeof this.options.initialValue === "function") {
-        this.options.initialValue().done(function(initialValue) {
-          _this.setValue(initialValue);
-          _this._bindEvents();
-          return _this._onInit();
-        });
-        return;
-      } else if (typeof this.options.initialValue === "object") {
-        this.setValue(this.options.initialValue);
-      }
-      this._bindEvents();
-      return this._onInit();
-    };
-
     Plugin.prototype._startIntervalCheck = function() {
       var _this = this;
       return this.options.intervalCheck = setInterval(function() {
@@ -338,7 +398,7 @@
     Plugin.prototype._createElem = function() {
       var $element, containerWidth;
       $element = this.options.element;
-      this.options.aclist.wrapper = $element.wrap(templates.wrapperTemplate);
+      this.options.aclist.wrapper = $element.wrap(templates.wrapperTemplate).addClass(this.options.additionalWrapperClass);
       this.options.hiddenElement = $("<input type='hidden' name='" + $element.attr("name") + "' />").val($element.val()).insertAfter($element);
       $element.removeAttr("name").val('');
       this.options.element.addClass(this.options.inputClass);
@@ -403,7 +463,8 @@
         },
         "focus.richAutocomplete": function() {
           _this._removePlaceholder();
-          return _this._startIntervalCheck();
+          _this._startIntervalCheck();
+          return _this._onFocus();
         },
         "blur.richAutocomplete": function() {
           _this._stopIntervalCheck();
@@ -412,7 +473,6 @@
               _this.setValue(_this.options.currentData);
             } else {
               _this.clearValue();
-              _this._setPlaceholder();
             }
             _this._closeContainer();
             return _this._onBlur();
@@ -475,25 +535,32 @@
     }
 
     ListGroup.prototype.render = function() {
-      template;
-      var header, template,
+      var groupContainer, header, headerContainer, itemTemplate,
         _this = this;
+      if (this.data.length === 0) {
+        return;
+      }
       if (this.groupIndex === -1) {
-        template = this.options.defaultLabelTemplate;
+        itemTemplate = this.options.defaultLabelTemplate;
         header = null;
       } else {
-        template = this.options.groups[this.groupIndex].template;
+        itemTemplate = this.options.groups[this.groupIndex].template;
         header = this.options.groups[this.groupIndex].header;
       }
-      if (header && this.data.length > 0) {
-        this.options.aclist.list.append($(header));
+      groupContainer = $(templates.groupTemplate);
+      if (this.groupIndex !== -1) {
+        groupContainer.addClass(this.options.groups[this.groupIndex].groupClass);
+      }
+      if (header) {
+        headerContainer = $(templates.groupHeaderTemplate).html($(header));
+        groupContainer.append(headerContainer);
       }
       if (this.options.maxViewedCount) {
         this.data = _.first(this.data, this.options.maxViewedCount);
       }
-      return _.each(this.data, function(itemData, index) {
+      _.each(this.data, function(itemData, index) {
         var listItem;
-        listItem = new ListItem(itemData, index, _this.options, template);
+        listItem = new ListItem(itemData, index, _this.options, itemTemplate, groupContainer);
         listItem.on("click.richAutocomplete", function(event, item) {
           _this.plugin.setValue(item.data);
           return _this.plugin._closeContainer();
@@ -508,6 +575,7 @@
         listItem.render();
         return _this.options.aclist.currentList.push(listItem);
       });
+      return this.options.aclist.list.append(groupContainer);
     };
 
     return ListGroup;
@@ -515,25 +583,25 @@
   })();
 
   ListItem = (function() {
-    function ListItem(data, index, options, template) {
+    function ListItem(data, index, options, template, parent) {
       this.data = data;
       this.index = index;
       this.options = options;
       this.template = template;
+      this.parent = parent;
       _.extend(this, getPubSub());
     }
 
     ListItem.prototype.render = function() {
-      var itemContainer, parent, template;
+      var itemContainer, template;
       if (typeof this.template === "function") {
         template = this.template(this.data, this.index);
       } else {
         template = this.template;
       }
-      parent = this.options.aclist.list;
-      itemContainer = $(templates.itemTemplate);
+      itemContainer = $(templates.itemTemplate).addClass(this.options.additionalItemClass);
       $(_.template(template, this.data)).appendTo(itemContainer);
-      itemContainer.appendTo(parent);
+      itemContainer.appendTo(this.parent);
       this.element = itemContainer;
       if (this.options.highlightResults) {
         innerHighlight(this.element.find(".-label")[0], this.options.element.val());
@@ -573,21 +641,18 @@
   })();
 
   $.extend({
-    richAutocompleteDataProvider: function(data, term, comparator) {
-      if (term == null) {
-        term = null;
-      }
+    richAutocompleteDataProvider: function(data, comparator) {
       if (comparator == null) {
         comparator = null;
       }
       if (!_.isArray(data)) {
         throw "data should be array";
       }
-      if (term === null) {
-        term = "label";
-      }
       if (comparator === null) {
-        comparator = function(dataItem, value) {
+        comparator = function(dataItem, value, groupIndex, term) {
+          if (term == null) {
+            term = "label";
+          }
           return dataItem[term].toLowerCase().indexOf(value.toLowerCase()) >= 0;
         };
       }
@@ -607,7 +672,7 @@
           return deferred.resolve(result);
         } else {
           result = _.filter(data, function(item) {
-            return comparator(item, value);
+            return comparator(item, value, -1);
           });
           return deferred.resolve(result);
         }
@@ -616,15 +681,15 @@
   });
 
   $.extend({
-    richAutocompleteAjaxProvider: function(url, term, type, additionalData) {
+    richAutocompleteAjaxProvider: function(url, additionalData, term, type) {
+      if (additionalData == null) {
+        additionalData = {};
+      }
       if (term == null) {
         term = "term";
       }
       if (type == null) {
         type = "get";
-      }
-      if (additionalData == null) {
-        additionalData = {};
       }
       return function(value) {
         var data;
@@ -643,6 +708,40 @@
     }
   });
 
+  $.extend({
+    richAutocompleteAjaxWithCacheProvider: function(url, additionalData, term, type) {
+      var cache;
+      if (additionalData == null) {
+        additionalData = {};
+      }
+      if (term == null) {
+        term = "term";
+      }
+      if (type == null) {
+        type = "get";
+      }
+      cache = [];
+      return function(value) {
+        var deferred;
+        console.log(cache);
+        deferred = new $.Deferred();
+        if (cache[value]) {
+          deferred.resolve(cache[value]);
+        } else {
+          $.richAutocompleteAjaxProvider(url, additionalData, term, type)(value).done(function(response) {
+            if (!cache[value]) {
+              cache[value] = response;
+            }
+            return deferred.resolve(response);
+          }).fail(function(response) {
+            return deferred.reject(response);
+          });
+        }
+        return deferred.promise();
+      };
+    }
+  });
+
   $.fn[pluginName] = function(options) {
     var args, methodName, returnVal;
     if (typeof arguments[0] === "string") {
@@ -650,9 +749,11 @@
       args = Array.prototype.slice.call(arguments, 1);
       returnVal = null;
       this.each(function() {
+        var plugin;
         if ($.data(this, "plugin_" + pluginName) && (typeof $.data(this, "plugin_" + pluginName)[methodName] === "function")) {
           if ((methodName !== "") && (methodName.charAt(0) !== "_")) {
-            return returnVal = $.data(this, "plugin_" + pluginName)[methodName].apply(this, args);
+            plugin = $.data(this, "plugin_" + pluginName);
+            return returnVal = plugin[methodName].apply(plugin.context, args);
           } else {
             throw new Error("Method " + methodName + " is private method of jQuery." + pluginName);
           }
