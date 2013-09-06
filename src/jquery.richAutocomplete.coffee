@@ -522,10 +522,10 @@ class ListItem
 
 
 $.extend(
-	richAutocompleteDataProvider: (data, comparator = null) ->
+	richAutocompleteDataProvider: (data, term = "label", comparator = null) ->
 		throw "data should be array" unless _.isArray(data)
 		if comparator == null
-			comparator = (dataItem, value, groupIndex, term = "label") ->
+			comparator = (dataItem, value, groupIndex, term) ->
 				dataItem[term].toLowerCase().indexOf(value.toLowerCase()) >= 0
 		return (value) ->
 			deferred = new $.Deferred()
@@ -535,13 +535,13 @@ $.extend(
 				result = []
 				_.each(data, (group, groupIndex) ->
 					result.push(_.filter(group, (item) ->
-						comparator(item, value, groupIndex)
+						comparator(item, value, groupIndex, term)
 					))
 				)
 				return deferred.resolve(result)
 			else
 				result = _.filter(data, (item) ->
-					comparator(item, value, -1)
+					comparator(item, value, -1, term)
 				)
 				return deferred.resolve(result) 			
 
