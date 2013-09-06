@@ -42,16 +42,92 @@ You can implement your own data provider. Creating new data provider described b
 var cities = [
 	{
 		id: 1,
-		label: "New York"
+		label: "New York",
+		country: "USA"
 	},
 	...
 	{
 		id: 10,
-		label: "Moscow"
+		label: "Moscow",
+		country: "Russia"
 	}
 ];
 
 $("input[name=someInputName]").richAutocomplete({
 	provider: $.richAutocompleteDataProvider(cities)
 });
+```
+By default, *richAutocompleteDataProvider* filters items by comparing *data.label* value with entered value at lowercase.
+If you want to compare another field, you can pass *field name* as a second parameter of provider function.
+
+```js
+	provider: $.richAutocompleteDataProvider(cities, "country")
+```
+
+If you want to implement your own complex comparator, you can pass it as a third parameter of provider function.
+
+```js
+/**
+ * @param {Object} comparable object
+ * @param {String} entered value
+ * @param {Number} index of group which data come from (see later)
+ */
+var myComparator = function(data, value, groupIndex) {
+	// implement your own logic
+	// function should return true or false as a result
+};
+	
+$("input[name=someInputName]").richAutocomplete({
+	provider: $.richAutocompleteDataProvider(cities, null, myComparator)
+});
+	
+```
+#### Asychronous data provider
+```js
+$("input[name=someInputName]").richAutocomplete({
+	provider: $.richAutocompleteAjaxProvider("/some/url")
+});
+```
+By default you should pass only *url address* to data provider. In that case, it will generate AJAX call with the following parameters:
+```js
+$.ajax({
+	type: 'get',
+	url: "/some/url",
+	dataType: 'json',
+	data: {
+		term: value
+	}
+})
+```
+You can change send data and request type by passing some extra paramenters to provider function.
+```js
+// additional data can be an object
+var additionalSendData = {
+	param1: "param1",
+	param2: "param2"
+}
+// or a function which returns an object
+var additionalSendData = function() {
+	return {
+		param1 : getMeParam1(),
+		param2 : getMeParam2()
+	};
+}
+
+$("input[name=someInputName]").richAutocomplete({
+	provider: $.richAutocompleteAjaxProvider("/some/url", additionalSendData, "label", "post")
+});
+```
+That configuration will generate the following AJAX request:
+```js
+$.ajax({
+	type: 'post',
+	url: "/some/url",
+	dataType: 'json',
+	data: {
+		label: value,
+		param1: "param1",
+		param2: "param2"
+	}
+})
 ```
