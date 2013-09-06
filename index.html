@@ -8,10 +8,13 @@
     <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen" />
     <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen" />
     <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print" />
-
     <!--[if lt IE 9]>
     <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
     <![endif]-->
+    <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+    <script type="text/javascript" src="javascripts/underscore.js"></script>
+    <script type="text/javascript" src="javascripts/jquery.mockjax.js"></script>
+    <script type="text/javascript" src="javascripts/jquery.richAutocomplete.js"></script>
 
     <title>Jquery.richautocomplete by suevalov</title>
   </head>
@@ -19,7 +22,7 @@
   <body>
     <header>
       <div class="inner">
-        <h1>Jquery.richautocomplete</h1>
+        <h1>Jquery.richAutocomplete</h1>
         <h2>Autocomplete plugin with some advanced features</h2>
         <a href="https://github.com/suevalov/jquery.richAutocomplete" class="button"><small>View project on</small>GitHub</a>
       </div>
@@ -29,21 +32,27 @@
       <div class="inner clearfix">
         <section id="main-content">
           <h3>
-<a name="welcome-to-github-pages" class="anchor" href="#welcome-to-github-pages"><span class="octicon octicon-link"></span></a>Welcome to GitHub Pages.</h3>
+<a name="intoduction" class="anchor" href="#intoduction"><span class="octicon octicon-link"></span></a>Introduction</h3>
 
-<p>This automatic page generator is the easiest way to create beautiful pages for all of your projects. Author your page content here using GitHub Flavored Markdown, select a template crafted by a designer, and publish. After your page is generated, you can check out the new branch:</p>
-
-<pre><code>$ cd your_repo_root/repo_name
-$ git fetch origin
-$ git checkout gh-pages
-</code></pre>
-
-<p>If you're using the GitHub for Mac, simply sync your repository and you'll see the new branch.</p>
+<p>This autocomplete plugin has some advanced features:</p>
+<ul>
+  <li>Different data providers: asychronous data provider, local data provider. Possibility to create your own data providers, for example, local storage data provider.</li>
+  <li>Placeholder for input, which works in all browsers.</li>
+  <li>Possibily to setup template for result item.</li>
+  <li>Possibility to group results to differents chunks.</li>
+  <li>Possibility to setup different templates for different chunks.</li>
+</ul>
 
 <h3>
-<a name="designer-templates" class="anchor" href="#designer-templates"><span class="octicon octicon-link"></span></a>Designer Templates</h3>
+<a name="basic-configuration" class="anchor" href="#basic-configuration"><span class="octicon octicon-link"></span></a>Basic Configuration</h3>
 
-<p>We've crafted some handsome templates for you to use. Go ahead and continue to layouts to browse through them. You can easily go back to edit your page before publishing. After publishing your page, you can revisit the page generator and switch to another theme. Your Page content will be preserved if it remained markdown format.</p>
+<pre><code>$("input[name=demo1]").richAutocomplete({
+    provider: $.richAutocompleteAjaxProvider("/sample/demo1")
+});</code></pre>
+
+<div class="demo">
+  <input type="text" name="demo1" style="width: 90%;" placeholder="Find your city" />
+</div>
 
 <h3>
 <a name="rather-drive-stick" class="anchor" href="#rather-drive-stick"><span class="octicon octicon-link"></span></a>Rather Drive Stick?</h3>
@@ -80,4 +89,5 @@ $ git checkout gh-pages
 
   
   </body>
+  <script type="text/javascript" src="javascripts/main.js"></script>
 </html>

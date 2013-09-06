@@ -73,7 +73,7 @@ header {
 
 header h1 {
   letter-spacing: -1px;
-  font-size: 72px;
+  font-size: 52px;
   color: #fff;
   line-height: 1;
   margin-bottom: 0.2em;
@@ -477,3 +477,72 @@ footer a:hover {
 
 /* Mobile Portrait Size to Mobile Landscape Size (devices and browsers) */
 @media only screen and (max-width: 479px) {}
+
+input[type=text] {
+  height: 20px;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.demo {
+  background-color: #f5f5f5;
+  border: 1px solid #ddd;
+  padding: 10px;
+}
+
+
+.-richAutocomplete__wrapper {
+    font-size: 12px;
+    position: relative;
+  }
+
+.-richAutocomplete__placeholder {
+    color: #aaa;
+    font-style: italic;
+  }
+
+.-richAutocomplete__list-container {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1000;
+    display: none;
+    background-color: white;
+    border: 1px solid #eee;
+  }
+
+.-richAutocomplete__loading {
+    padding: 20px;
+    text-align: center;
+  }
+
+.-richAutocomplete__not-found {
+    text-align: center;
+    padding: 20px;
+  }
+
+.-richAutocomplete__list {
+    padding: 0;
+    margin: 0;
+  }
+
+.-richAutocomplete__list-item {
+    font-size: 12px;
+    height: 25px;
+    line-height: 25px;
+    padding-left: 20px;
+}
+
+.-richAutocomplete__list-item.active {
+    background-color: #428bca;
+    color: white;
+}
+
+.-richAutocomplete__list-item.active  .highlight {
+    background: none;
+    font-weight: bold;
+}
+
+.-richAutocomplete__list-item .highlight {
+      background: #eee;
+}
