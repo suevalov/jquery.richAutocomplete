@@ -5,7 +5,7 @@ Autocomplete plugin with some advanced features:
 
 * Different data providers: asychronous data provider, local data provider. Possibility to create your own data providers, for example, local storage data provider.
 * Placeholder for input, which works in all browsers.
-* Possibily to setup template for result item.
+* Possibility to setup template for result item.
 * Possibility to group results to differents chunks.
 * Possibility to setup different templates for different chunks.
 
@@ -131,3 +131,27 @@ $.ajax({
 	}
 })
 ```
+#### Asychronous data provider with caching
+```js
+$("input[name=someInputName]").richAutocomplete({
+	provider: $.richAutocompleteAjaxWithCacheProvider("/some/url")
+});
+```
+This provider accepts similar parameters as *richAutocompleteAjaxProvider*.
+
+#### Creating your own provider
+If you want to implement your own provider you should create function with following pattern:
+```js
+var myProviderFunction = function(param1, param2) {
+	var someDataStorage;
+	return function(value) {
+		// this function should return jQuery.promise object
+		var deferred = new $.Deferred();
+		var result = someDataStorage.findAllItemByValue(value);
+		return deferred.resolve(result);
+	}
+	
+}
+```
+
+
