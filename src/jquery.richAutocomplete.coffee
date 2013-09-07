@@ -1,7 +1,7 @@
 pluginName = "richAutocomplete"
 defaults =
 
-	containderWidth: false
+	containerWidth: false
 
 
 	initialValue: false
@@ -340,7 +340,7 @@ class Plugin
 		@options.hiddenElement.addClass(@options.hiddenInputClass)
 
 		@options.aclist.container = $(templates.listContainer).insertAfter($element).hide()
-		containerWidth
+
 		if @options.containerWidth
 			containerWidth = @options.containerWidth
 		else
