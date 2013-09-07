@@ -28,6 +28,29 @@ There are some properties that you can setup:
 | placeholder | placeholder for input, you should pay attention, that 'placeholder' attribute in input overriders 'placeholder' setting  |
 | maxViewedCount | maximum items count, which will be visible in popup container *[default_value = false]* |
 | containerWidth | by default popup container width equals input width, but you can override it by setting up this parameter with concrete pixels *[default_value = false]* |  
+| defaultLabelTemplate | Default template for items in popup container. Templates should have Underscore template syntax. *[default_value = "<div class='-label'><%= label %></div>"]* "
+| initialValue | Initial object value which will be set to input on plugin initialization. *[default_value = false ]* |
+| highlightResults | Searching and highlighting entered value in item template ( within "-label" class)  *[default_value = true]* |
+| defaultTerm | Value in incoming result object which will be main. *[default_value = "label"]* |
+| showLoading | Show loading template between showing searchResults *[default_value = false ]* |
+| loadingText | Loading text which will be shown at loading template. *[default_value = "Loading..."]* |
+| notFoundText | Text which will be shown when search returns empty result. *[default_value = "Nothing was found."]* |
+| groups | Settings for grouped results (See explanation below) *[default_value = null ]* |
+| placeholderClass | Class which will be added to input, when placeholder is shown. *[default_value = "-richAutocomplete__placeholder" ]* |
+| inputClass | Class which will be added to input. *[default_value = "-richAutocomplete__input" ]* "
+| hiddenInputClass | Class which will be added to generated hidden input. *[default_value = "-richAutocomplete__hidden-input"]*  |
+| additionalWrapperClass | Class which will be added to generated input wrapper. *[default_value = "" ]* |
+| additionalItemClass | Class which will be added to each item in popup results container. *[default_value = "" ]* |
+
+Also you can define some event handlers: 
+
+|  Event  |  Description   |
+| ------------- | ------------- |
+| onInit | Calls on plugin initialization |
+| onClear | Calls on input reset |
+| onSet | Calls on setting value to input |
+| onFocus | Calls on focus at input |
+| onBlur | Calls on blur from input |
 
 ### Data providers
 
