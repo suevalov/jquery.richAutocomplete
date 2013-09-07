@@ -4,7 +4,7 @@
   pluginName = "richAutocomplete";
 
   defaults = {
-    containderWidth: false,
+    containerWidth: false,
     initialValue: false,
     onInit: false,
     onClear: false,
@@ -404,7 +404,6 @@
       this.options.element.addClass(this.options.inputClass);
       this.options.hiddenElement.addClass(this.options.hiddenInputClass);
       this.options.aclist.container = $(templates.listContainer).insertAfter($element).hide();
-      containerWidth;
       if (this.options.containerWidth) {
         containerWidth = this.options.containerWidth;
       } else {
