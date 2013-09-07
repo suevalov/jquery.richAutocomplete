@@ -177,4 +177,53 @@ var myProviderFunction = function(param1, param2) {
 }
 ```
 
+### Defining item template
+
+You can override default item template by setting up **defaultLabelTemplate** property.
+
+```js
+
+var cities = [
+	{
+		id: 1,
+		label: "New York",
+		country: "USA",
+		population: "8.3 millions"
+	},
+	...
+	{
+		id: 10,
+		label: "Moscow",
+		country: "Russia",
+		population: "11.5 millions"
+	}
+];
+
+// template can be a string
+$("input[name=someInputName]").richAutocomplete({
+	provider: $.richAutocompleteDataProvider(cities),
+	defaultLabelTemplate: "<div><span class='-label'><%= label %></span> - <span><%= country %></span></div>"
+});
+
+// or template can be a function
+$("input[name=someInputName]").richAutocomplete({
+	provider: $.richAutocompleteDataProvider(cities),
+	defaultLabelTemplate: function(data) {
+		if (data.id % 2 === 0) {
+			return "<div><span class='-label'><%= label %></span> - <span><%= country %></span></div>";
+		} else {
+			return "<div><span class='-label'><%= label %></span> - <span><%= population %></span></div>"
+		}
+	}
+});
+
+```
+
+### Public methods
+
+### Events
+
+### Grouped results
+
+### License
 
