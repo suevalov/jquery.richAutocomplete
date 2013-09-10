@@ -2,8 +2,6 @@ pluginName = "richAutocomplete"
 defaults =
 
 	containerWidth: false
-
-
 	initialValue: false
 	
 	# events #
@@ -15,14 +13,17 @@ defaults =
 
 	# required properties #
 	provider: false
-	defaultLabelTemplate: '<div class="-label"><%= label %></div>'
+	defaultTemplate: '<div class="-highlight"><%= label %></div>'
 
 	# additional properties #
 	defaultTerm: "label"
 	minLength: 1
-	loadingText: "Loading..."
-	notFoundText: "Nothing was found"
+
+	loadingTemplate: "Loading..."
 	showLoading: false,
+
+	emptyTemplate: "Nothing was found"
+
 	highlightResults: true
 	maxViewedCount: false
 	placeholder: false
@@ -104,7 +105,7 @@ innerHighlight = (node, pat) ->
 		pos = node.data.toUpperCase().indexOf(pat.toUpperCase())
 		if pos >= 0
 			spannode = document.createElement("span")
-			spannode.className = "highlight"
+			spannode.className = "highlighted"
 			middlebit = node.splitText(pos)
 			endbit = middlebit.splitText(pat.length)
 			middleclone = middlebit.cloneNode(true)
@@ -284,7 +285,7 @@ class Plugin
 		@options.textVal = @options.element.val()
 		if @options.showLoading
 			@options.aclist.list.hide()
-			@options.aclist.loadingItem.html(@options.loadingText).show()
+			@options.aclist.loadingItem.html(@options.loadingTemplate).show()
 		@_openContainer()
 		@options.provider(@options.textVal).done((response) =>
 			if @options.showLoading
@@ -431,7 +432,7 @@ class Plugin
 				group = new ListGroup(data, @)
 				group.render()
 			if @options.aclist.currentList.length is 0
-				notFoundTemplate = $(templates.notFoundTemplate).html(@options.notFoundText).appendTo(@options.aclist.list)
+				notFoundTemplate = $(templates.notFoundTemplate).html(@options.emptyTemplate).appendTo(@options.aclist.list)
 			else if @options.currentData
 				currentItem = _.first(_.filter(@options.aclist.currentList, (listItem) => 
 					_.isEqual(listItem.data, @options.currentData)
@@ -440,7 +441,7 @@ class Plugin
 				@options.aclist.currentIndex = _.indexOf(@options.aclist.currentList, currentItem)
 				currentItem.select()
 		else
-			notFoundTemplate = $(templates.notFoundTemplate).html(@options.notFoundText).appendTo(@options.aclist.list)
+			notFoundTemplate = $(templates.notFoundTemplate).html(@options.emptyTemplate).appendTo(@options.aclist.list)
 
 class ListGroup
 	constructor: (@data, @plugin, @groupIndex = -1) ->
@@ -450,7 +451,7 @@ class ListGroup
 		if @data.length is 0
 			return
 		if @groupIndex is -1
-			itemTemplate = @options.defaultLabelTemplate
+			itemTemplate = @options.defaultTemplate
 			header = null
 		else
 			itemTemplate = @options.groups[@groupIndex].template
@@ -496,9 +497,11 @@ class ListItem
 		@element = itemContainer
 
 		if @options.highlightResults
-			innerHighlight(@element.find(".-label")[0], @options.element.val())
-
+			elemToHighlight = @element.find(".-highlight")
+			if (elemToHighlight.length > 0)
+				innerHighlight(elemToHighlight[0], @options.element.val())
 		@_bindEvents()
+
 		@
 	_bindEvents: ->
 		@element.on("click.richAutocomplete", =>
@@ -563,12 +566,10 @@ $.extend(
 			)
 )
 
-
 $.extend(
 	richAutocompleteAjaxWithCacheProvider: (url, additionalData = {}, term = "term", type = "get") ->
 		cache = []
 		return (value) ->
-			console.log(cache)
 			deferred = new $.Deferred()
 			if cache[value]
 				deferred.resolve(cache[value])

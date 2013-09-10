@@ -12,12 +12,12 @@
     onBlur: false,
     onFocus: false,
     provider: false,
-    defaultLabelTemplate: '<div class="-label"><%= label %></div>',
+    defaultTemplate: '<div class="-highlight"><%= label %></div>',
     defaultTerm: "label",
     minLength: 1,
-    loadingText: "Loading...",
-    notFoundText: "Nothing was found",
+    loadingTemplate: "Loading...",
     showLoading: false,
+    emptyTemplate: "Nothing was found",
     highlightResults: true,
     maxViewedCount: false,
     placeholder: false,
@@ -117,7 +117,7 @@
       pos = node.data.toUpperCase().indexOf(pat.toUpperCase());
       if (pos >= 0) {
         spannode = document.createElement("span");
-        spannode.className = "highlight";
+        spannode.className = "highlighted";
         middlebit = node.splitText(pos);
         endbit = middlebit.splitText(pat.length);
         middleclone = middlebit.cloneNode(true);
@@ -344,7 +344,7 @@
       this.options.textVal = this.options.element.val();
       if (this.options.showLoading) {
         this.options.aclist.list.hide();
-        this.options.aclist.loadingItem.html(this.options.loadingText).show();
+        this.options.aclist.loadingItem.html(this.options.loadingTemplate).show();
       }
       this._openContainer();
       return this.options.provider(this.options.textVal).done(function(response) {
@@ -507,7 +507,7 @@
           group.render();
         }
         if (this.options.aclist.currentList.length === 0) {
-          return notFoundTemplate = $(templates.notFoundTemplate).html(this.options.notFoundText).appendTo(this.options.aclist.list);
+          return notFoundTemplate = $(templates.notFoundTemplate).html(this.options.emptyTemplate).appendTo(this.options.aclist.list);
         } else if (this.options.currentData) {
           currentItem = _.first(_.filter(this.options.aclist.currentList, function(listItem) {
             return _.isEqual(listItem.data, _this.options.currentData);
@@ -517,7 +517,7 @@
           return currentItem.select();
         }
       } else {
-        return notFoundTemplate = $(templates.notFoundTemplate).html(this.options.notFoundText).appendTo(this.options.aclist.list);
+        return notFoundTemplate = $(templates.notFoundTemplate).html(this.options.emptyTemplate).appendTo(this.options.aclist.list);
       }
     };
 
@@ -540,7 +540,7 @@
         return;
       }
       if (this.groupIndex === -1) {
-        itemTemplate = this.options.defaultLabelTemplate;
+        itemTemplate = this.options.defaultTemplate;
         header = null;
       } else {
         itemTemplate = this.options.groups[this.groupIndex].template;
@@ -592,7 +592,7 @@
     }
 
     ListItem.prototype.render = function() {
-      var itemContainer, template;
+      var elemToHighlight, itemContainer, template;
       if (typeof this.template === "function") {
         template = this.template(this.data, this.index);
       } else {
@@ -603,7 +603,10 @@
       itemContainer.appendTo(this.parent);
       this.element = itemContainer;
       if (this.options.highlightResults) {
-        innerHighlight(this.element.find(".-label")[0], this.options.element.val());
+        elemToHighlight = this.element.find(".-highlight");
+        if (elemToHighlight.length > 0) {
+          innerHighlight(elemToHighlight[0], this.options.element.val());
+        }
       }
       this._bindEvents();
       return this;
@@ -640,7 +643,10 @@
   })();
 
   $.extend({
-    richAutocompleteDataProvider: function(data, comparator) {
+    richAutocompleteDataProvider: function(data, term, comparator) {
+      if (term == null) {
+        term = "label";
+      }
       if (comparator == null) {
         comparator = null;
       }
@@ -649,9 +655,6 @@
       }
       if (comparator === null) {
         comparator = function(dataItem, value, groupIndex, term) {
-          if (term == null) {
-            term = "label";
-          }
           return dataItem[term].toLowerCase().indexOf(value.toLowerCase()) >= 0;
         };
       }
@@ -665,13 +668,13 @@
           result = [];
           _.each(data, function(group, groupIndex) {
             return result.push(_.filter(group, function(item) {
-              return comparator(item, value, groupIndex);
+              return comparator(item, value, groupIndex, term);
             }));
           });
           return deferred.resolve(result);
         } else {
           result = _.filter(data, function(item) {
-            return comparator(item, value, -1);
+            return comparator(item, value, -1, term);
           });
           return deferred.resolve(result);
         }
@@ -722,7 +725,6 @@
       cache = [];
       return function(value) {
         var deferred;
-        console.log(cache);
         deferred = new $.Deferred();
         if (cache[value]) {
           deferred.resolve(cache[value]);
