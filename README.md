@@ -221,9 +221,131 @@ $("input[name=someInputName]").richAutocomplete({
 
 ### Public methods
 
-### Events
-
 ### Grouped results
 
-### License
+Additional plugin feature is possibility to accept and show grouped results. What does it mean? Lets look at the example!
+
+```js
+
+// Lets say that we have three arrays of cities: the first includes only capitals, 
+// the second - cities with population more than 1 million people, the third - cities with population less than 1 million people
+
+var cities = [
+	[
+		{
+			label: "Washington, D.C.",
+			country: "USA"
+		},
+		{
+			label: "London",
+			country: "UK"
+		},
+		{
+			label: "Moscow",
+			country: "Russian Federation"
+		}
+	],
+	[
+		{
+			label: "New York",
+			country: "USA",
+			population: "8.3 millions"
+		},
+		{
+			label: "Birmingham",
+			country: "UK",
+			population: "1 million"
+		},
+		{
+			label: "Saint Petersburg",
+			coutry: "Russian Federation",
+			population: "4.8 millions"
+		}
+	],
+	[
+		{
+			label: "Springfield",
+			country: "USA",
+			population: "150k",
+			region: "Massachusetts"
+		},
+		{
+			label: "Manchester",
+			country: "UK",
+			population: "500k",
+			region: "North West England"
+		},
+		{
+			label: "Cherepovets",
+			coutry: "Russian Federation",
+			population: "330k",
+			region: "Vologda Region"
+		}
+	]
+];
+
+// As you can see, each group has different data properties and we want to define unique template for each group
+
+$("input[name=someInputName]").richAutocomplete({
+	provider: $.richAutocompleteDataProvider(cities),
+	groups: [
+		{
+			template: function(data) {
+				return "<div><%= label %></div><div><i><%= country %></i></div>";		
+			},
+			header: "<h2>Capitals</h2>",
+			groupClass: "-citiesCapitalsClass"	
+		},
+		{
+			template: function(data) {
+				return "<div><%= label %></div><div><i><%= country %></i></div><div><i><%= population %></i></div>";
+			},
+			header: "<h2>Megalopolis</h2>",
+			groupClass: "-citiesMegalopolisesClass"	
+		},
+		{
+			template: function(data) {
+				return "<div><%= label %> , <%= region %></div><div><i><%= country %></i></div><div><i><%= population %></i></div>";
+			},
+			header: "<h2>Other cities</h2>",
+			groupClass: "-citiesOtherClass"	
+		}
+	]
+	
+});
+
+
+```
+
+Then it will generate following HTML code:
+
+```html
+
+<div class="-richAutocomplete__list">
+	<div class="-richAutocomplete__item-group -citiesCapitalsClass">
+		<div class="-richAutocomplete__item-group-header">
+			<h2>Capitals</h2>
+		</div>
+		<div class="-richAutocomplete__list-item">
+			<div>Washington, D.C.</div>
+			<div><i>USA</i></div>
+		</div>
+		<div class="-richAutocomplete__list-item">
+			<div>Moscow</div>
+			<div><i>Russian Federation</i></div>
+		</div>
+	</div>
+	<div class="-richAutocomplete__item-group -citiesMegalopolisesClass">
+		<div class="-richAutocomplete__item-group-header">
+			<h2>Megalopolis</h2>
+		</div>
+		<div class="-richAutocomplete__list-item">
+			<div>New York</div>
+			<div><i>USA</i></div>
+			<div><i>8.3 millions</i></div>
+		</div>
+	</div>
+</div>
+
+```
 
