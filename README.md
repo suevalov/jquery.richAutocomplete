@@ -1,4 +1,4 @@
-jquery.richAutocomplete 0.1
+jquery.richAutocomplete
 =======================
 
 Autocomplete plugin with some advanced features:
@@ -8,6 +8,11 @@ Autocomplete plugin with some advanced features:
 * Possibility to setup template for result item.
 * Possibility to group results to differents chunks.
 * Possibility to setup different templates for different chunks.
+
+### Dependecies ###
+
+* jQuery
+* Underscore
 
 ### Basic initialization
 
@@ -220,6 +225,20 @@ $("input[name=someInputName]").richAutocomplete({
 ```
 
 ### Public methods
+
+Plugin allows to call manually some public functions from outside.
+
+```js
+
+$("input[name=someInputName]").richAutocomplete(methodName, methodData);	
+
+```
+
+* **setValue(data)** - set value to compoment
+* **getValue()** - returns current seletected value
+* **clearValue()** - clears component value
+* **changePlaceholder(placeholder)** - set new placeholder
+* **setProvider(provider)** - set data provider
 
 ### Grouped results
 
