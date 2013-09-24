@@ -33,36 +33,16 @@ There are some properties that you can setup:
 | placeholder | placeholder for input, you should pay attention, that 'placeholder' attribute in input overriders 'placeholder' setting  |
 | maxViewedCount | maximum items count, which will be visible in popup container *[default_value = false]* |
 | containerWidth | by default popup container width equals input width, but you can override it by setting up this parameter with concrete pixels *[default_value = false]* |  
-| defaultTemplate | Default template for items in popup container. Templates should have Underscore template syntax. *[default_value = "<div class='-highlight'><%= label %></div>"]* "
 | initialValue | Initial object value which will be set to input on plugin initialization. *[default_value = false ]* |
 | highlightResults | Searching and highlighting entered value in item template ( within "-label" class)  *[default_value = true]* |
 | defaultTerm | Value in incoming result object which will be main. *[default_value = "label"]* |
-| showLoading | Show loading template between showing searchResults *[default_value = false ]* |
-| loadingTemplate | Loading text which will be shown at loading template. *[default_value = "Loading..."]* |
-| emptyTemplate | Text which will be shown when search returns empty result. *[default_value = "Nothing was found."]* |
 | groups | Settings for grouped results (See explanation below) *[default_value = null ]* |
-| placeholderClass | Class which will be added to input, when placeholder is shown. *[default_value = "-richAutocomplete__placeholder" ]* |
-| inputClass | Class which will be added to input. *[default_value = "-richAutocomplete__input" ]* "
-| hiddenInputClass | Class which will be added to generated hidden input. *[default_value = "-richAutocomplete__hidden-input"]*  |
-| additionalWrapperClass | Class which will be added to generated input wrapper. *[default_value = "" ]* |
-| additionalItemClass | Class which will be added to each item in popup results container. *[default_value = "" ]* |
-
-Also you can define some event handlers: 
-
-|  Event  |  Description   |
-| ------------- | ------------- |
-| onInit | Calls on plugin initialization |
-| onClear | Calls on input reset |
-| onSet | Calls on setting value to input |
-| onFocus | Calls on focus at input |
-| onBlur | Calls on blur from input |
 
 ### Data providers
 
 There are 3 implemented data providers for plugin:
 * static data provider;
 * asychronous data provider;
-* asychronous data provider with caching.
 
 You can implement your own data provider. Creating new data provider described below.
 #### Static data provider
@@ -159,13 +139,6 @@ $.ajax({
 	}
 })
 ```
-#### Asychronous data provider with caching
-```js
-$("input[name=someInputName]").richAutocomplete({
-	provider: $.richAutocompleteAjaxWithCacheProvider("/some/url")
-});
-```
-This provider accepts similar parameters as *richAutocompleteAjaxProvider*.
 
 #### Creating your own provider
 If you want to implement your own provider you should create function with following pattern:
@@ -207,38 +180,26 @@ var cities = [
 // template can be a string
 $("input[name=someInputName]").richAutocomplete({
 	provider: $.richAutocompleteDataProvider(cities),
-	defaultTemplate: "<div><span class='-highlight'><%= label %></span> - <span><%= country %></span></div>"
+	render: {
+		itemTemplate: "<div><span class='-highlight'><%= label %></span> - <span><%= country %></span></div>"
+	}
 });
 
 // or template can be a function
 $("input[name=someInputName]").richAutocomplete({
 	provider: $.richAutocompleteDataProvider(cities),
-	defaultTemplate: function(data) {
-		if (data.id % 2 === 0) {
-			return "<div><span class='-highlight'><%= label %></span> - <span><%= country %></span></div>";
-		} else {
-			return "<div><span class='-highlight'><%= label %></span> - <span><%= population %></span></div>"
+	render: {
+		itemTemplate: function(data) {
+			if (data.id % 2 === 0) {
+				return "<div><span class='-highlight'><%= label %></span> - <span><%= country %></span></div>";
+			} else {
+				return "<div><span class='-highlight'><%= label %></span> - <span><%= population %></span></div>"
+			}
 		}
 	}
 });
 
 ```
-
-### Public methods
-
-Plugin allows to call manually some public functions from outside.
-
-```js
-
-$("input[name=someInputName]").richAutocomplete(methodName, methodData);	
-
-```
-
-* **setValue(data)** - set value to compoment
-* **getValue()** - returns current seletected value
-* **clearValue()** - clears component value
-* **changePlaceholder(placeholder)** - set new placeholder
-* **setProvider(provider)** - set data provider
 
 ### Grouped results
 
@@ -258,10 +219,6 @@ var cities = [
 		{
 			label: "London",
 			country: "UK"
-		},
-		{
-			label: "Moscow",
-			country: "Russian Federation"
 		}
 	],
 	[
@@ -274,11 +231,6 @@ var cities = [
 			label: "Birmingham",
 			country: "UK",
 			population: "1 million"
-		},
-		{
-			label: "Saint Petersburg",
-			coutry: "Russian Federation",
-			population: "4.8 millions"
 		}
 	],
 	[
@@ -293,12 +245,6 @@ var cities = [
 			country: "UK",
 			population: "500k",
 			region: "North West England"
-		},
-		{
-			label: "Cherepovets",
-			coutry: "Russian Federation",
-			population: "330k",
-			region: "Vologda Region"
 		}
 	]
 ];
@@ -309,62 +255,28 @@ $("input[name=someInputName]").richAutocomplete({
 	provider: $.richAutocompleteDataProvider(cities),
 	groups: [
 		{
-			template: function(data) {
+			itemTemplate: function(data) {
 				return "<div><%= label %></div><div><i><%= country %></i></div>";		
 			},
-			header: "<h2>Capitals</h2>",
+			headerTemplate: "<h2>Capitals</h2>",
 			groupClass: "-citiesCapitalsClass"	
 		},
 		{
-			template: function(data) {
+			itemTemplate: function(data) {
 				return "<div><%= label %></div><div><i><%= country %></i></div><div><i><%= population %></i></div>";
 			},
-			header: "<h2>Megalopolis</h2>",
+			headerTemplate: "<h2>Megalopolis</h2>",
 			groupClass: "-citiesMegalopolisesClass"	
 		},
 		{
-			template: function(data) {
+			itemTemplate: function(data) {
 				return "<div><%= label %> , <%= region %></div><div><i><%= country %></i></div><div><i><%= population %></i></div>";
 			},
-			header: "<h2>Other cities</h2>",
+			headerTemplate: "<h2>Other cities</h2>",
 			groupClass: "-citiesOtherClass"	
 		}
 	]
 	
 });
-
-
-```
-
-Then it will generate following HTML code:
-
-```html
-
-<div class="-richAutocomplete__list">
-	<div class="-richAutocomplete__item-group -citiesCapitalsClass">
-		<div class="-richAutocomplete__item-group-header">
-			<h2>Capitals</h2>
-		</div>
-		<div class="-richAutocomplete__list-item">
-			<div>Washington, D.C.</div>
-			<div><i>USA</i></div>
-		</div>
-		<div class="-richAutocomplete__list-item">
-			<div>Moscow</div>
-			<div><i>Russian Federation</i></div>
-		</div>
-	</div>
-	<div class="-richAutocomplete__item-group -citiesMegalopolisesClass">
-		<div class="-richAutocomplete__item-group-header">
-			<h2>Megalopolis</h2>
-		</div>
-		<div class="-richAutocomplete__list-item">
-			<div>New York</div>
-			<div><i>USA</i></div>
-			<div><i>8.3 millions</i></div>
-		</div>
-	</div>
-</div>
-
 ```
 
