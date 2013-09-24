@@ -1,0 +1,180 @@
+.-richAutocomplete__wrapper {
+  position: relative;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.-richAutocomplete__input {
+  position: relative;
+  z-index: 1;
+  display: inline-block;
+  width: 100%;
+  padding: 4px 8px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #ffffff;
+  border: 1px solid #d0d0d0;
+  -webkit-border-radius: 3px;
+     -moz-border-radius: 3px;
+          border-radius: 3px;
+  -webkit-box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.1);
+          box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.1);
+  -webkit-box-sizing: border-box;
+     -moz-box-sizing: border-box;
+          box-sizing: border-box;
+}
+
+.-richAutocomplete__input > * {
+  display: -moz-inline-stack;
+  display: inline-block;
+  *display: inline;
+  vertical-align: baseline;
+  zoom: 1;
+}
+
+.-richAutocomplete__input > input {
+  max-width: 100% !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 2px 0 0 !important;
+  line-height: inherit !important;
+  text-indent: 0 !important;
+  background: none !important;
+  border: 0 none !important;
+  -webkit-box-shadow: none !important;
+          box-shadow: none !important;
+  -webkit-user-select: auto !important;
+}
+
+.-richAutocomplete__input > input:focus {
+  outline: none !important;
+}
+
+.-richAutocomplete__multi-select > div {
+  position: relative;
+  padding-right: 6px;
+  padding-left: 6px;
+  margin-right: 6px;
+  color: #303030;
+  cursor: pointer;
+  background: #f2f2f2;
+  border: 0 solid #d0d0d0;
+}
+
+.-richAutocomplete__multi-select > div.active {
+  color: #303030;
+  background: #e8e8e8;
+  border: 0 solid #cacaca;
+}
+
+.-richAutocomplete__remove-button > div {
+  padding-right: 22px;
+}
+
+.-richAutocomplete__remove-button > div .remove {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: inline-block;
+  width: 17px;
+  font-size: 11px;
+  font-weight: bold;
+  line-height: 18px;
+  color: #303030;
+  text-align: center;
+  text-decoration: none;
+  border-left: 1px solid #d0d0d0;
+}
+
+.-richAutocomplete__remove-button > div .remove:hover {
+  text-decoration: none;
+}
+
+.-richAutocomplete__placeholder {
+  position: absolute;
+  top: 6px;
+  left: 12px;
+  z-index: 1000;
+  font-style: italic;
+  color: #aaa;
+  cursor: pointer;
+  visibility: visible;
+}
+
+.-richAutocomplete__focused .-richAutocomplete__input {
+  cursor: text;
+}
+
+.-richAutocomplete__focused .-richAutocomplete__placeholder,
+.-richAutocomplete__selected .-richAutocomplete__placeholder {
+  display: none;
+}
+
+.-richAutocomplete__list-container {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 1000;
+  display: none;
+  background-color: white;
+  border: 1px solid #eee;
+}
+
+.-richAutocomplete__empty {
+  padding: 20px;
+  text-align: center;
+}
+
+.-richAutocomplete__create {
+  padding: 5px;
+  padding-left: 15px;
+  cursor: pointer;
+}
+
+.-richAutocomplete__create.-active {
+  color: white;
+  background-image: -webkit-gradient(linear, left 0%, left 100%, from(#428bca), to(#357ebd));
+  background-image: -webkit-linear-gradient(top, #428bca, 0%, #357ebd, 100%);
+  background-image: -moz-linear-gradient(top, #428bca 0%, #357ebd 100%);
+  background-image: linear-gradient(to bottom, #428bca 0%, #357ebd 100%);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#ff428bca', endColorstr='#ff357ebd', GradientType=0);
+}
+
+.-richAutocomplete__not-found {
+  padding: 20px;
+  text-align: center;
+}
+
+.-richAutocomplete__list {
+  padding: 0;
+  margin: 0;
+}
+
+.-richAutocomplete__list-item {
+  height: 25px;
+  padding-left: 20px;
+  font-size: 12px;
+  line-height: 25px;
+}
+
+.-richAutocomplete__list-item.-active {
+  color: white;
+  background-image: -webkit-gradient(linear, left 0%, left 100%, from(#428bca), to(#357ebd));
+  background-image: -webkit-linear-gradient(top, #428bca, 0%, #357ebd, 100%);
+  background-image: -moz-linear-gradient(top, #428bca 0%, #357ebd 100%);
+  background-image: linear-gradient(to bottom, #428bca 0%, #357ebd 100%);
+  background-repeat: repeat-x;
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#ff428bca', endColorstr='#ff357ebd', GradientType=0);
+}
+
+.-richAutocomplete__list-item.-active .highlighted {
+  font-weight: bold;
+  background: none;
+}
+
+.-richAutocomplete__list-item .highlighted {
+  background: #eee;
+}
