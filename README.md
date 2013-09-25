@@ -8,6 +8,7 @@ Autocomplete plugin with some advanced features:
 * Possibility to setup template for result item.
 * Possibility to group results to differents chunks.
 * Possibility to setup different templates for different chunks.
+* Possibility to multiple choice.
 
 ### Dependecies ###
 
@@ -28,23 +29,31 @@ There are some properties that you can setup:
 
 | Property    | Description   |
 | ------------- |-------------|
-| provider    | data provider *[required]* |
-| minLength   |  minimal characters count to start searching *[default_value = 1]* |
-| placeholder | placeholder for input, you should pay attention, that 'placeholder' attribute in input overriders 'placeholder' setting  |
-| maxViewedCount | maximum items count, which will be visible in popup container *[default_value = false]* |
-| containerWidth | by default popup container width equals input width, but you can override it by setting up this parameter with concrete pixels *[default_value = false]* |  
+| provider    | Data provider *[required]* |
+| minLength   |  Minimal characters count to start searching *[default_value = 1]* |
+| placeholder | Placeholder for input, you should pay attention, that 'placeholder' attribute in input overriders 'placeholder' setting  |
+| maxViewedCount | Maximum items count, which will be visible in popup container *[default_value = false]* |
+| containerWidth | By default popup container width equals input width, but you can override it by setting up this parameter with concrete pixels *[default_value = false]* |  
 | initialValue | Initial object value which will be set to input on plugin initialization. *[default_value = false ]* |
 | highlightResults | Searching and highlighting entered value in item template ( within "-label" class)  *[default_value = true]* |
 | defaultTerm | Value in incoming result object which will be main. *[default_value = "label"]* |
 | groups | Settings for grouped results (See explanation below) *[default_value = null ]* |
+| cache | Cache incoming results. *[default_value = false]* |
+| cacheLimit | Cache size limit. *[default_value = 20]* |
+| mode | Determines single or multiple mode. *[default_value = "single"] : "single", "multi"* |
+| additionalMode | Determines additional container type. *[default_value = "empty"] : "empty", "create", "nothing"* |
+| maxSelectedOptions | Determines max selected options for multiple choice. *[default_value = false] : false, 1 - n* |
+| removeButton | Options in multiple choice have remove buttons. *[default_value = false : false, true]*|
+| render | Settings for rendering items (see below) |
+
 
 ### Data providers
 
-There are 3 implemented data providers for plugin:
+There are 2 implemented data providers for plugin:
 * static data provider;
 * asychronous data provider;
 
-You can implement your own data provider. Creating new data provider described below.
+You can implement your own data provider (for example, local storage provider). Creating new data provider described below.
 #### Static data provider
 ```js
 var cities = [
