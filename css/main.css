@@ -51,11 +51,16 @@
   outline: none !important;
 }
 
+.-richAutocomplete__multi-select.-has-items {
+  padding-bottom: 0;
+}
+
 .-richAutocomplete__multi-select > div {
   position: relative;
   padding-right: 6px;
   padding-left: 6px;
   margin-right: 6px;
+  margin-bottom: 5px;
   color: #303030;
   cursor: pointer;
   background: #f2f2f2;
@@ -90,6 +95,10 @@
 
 .-richAutocomplete__remove-button > div .remove:hover {
   text-decoration: none;
+}
+
+.-richAutocomplete__loading {
+  background: #ffffff url("/images/ajax-loader.gif") 99% 50% no-repeat;
 }
 
 .-richAutocomplete__placeholder {
