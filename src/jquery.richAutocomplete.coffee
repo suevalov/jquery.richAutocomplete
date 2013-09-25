@@ -30,6 +30,7 @@ classes =
 	highlightClass: "-highlight"
 	multiSelectClass: "-richAutocomplete__multi-select"
 	loadingClass: "-richAutocomplete__loading"
+	hasItems: "-has-items"
 
 Mode =
 	SINGLE: "single"
@@ -54,6 +55,7 @@ defaults =
 	createTemplate: "Create <i><%= value %></i>..."
 
 	cache: false
+	cacheLimit: 20
 	highlightResults: true
 	maxViewedCount: 10
 	placeholder: false
@@ -76,7 +78,7 @@ defaults =
 	
 	mode: Mode.SINGLE
 	additionalMode: AdditionalMode.EMPTY
-	maxSelectedOptions: 10
+	maxSelectedOptions: false
 	removeButton: false
 
 
@@ -260,18 +262,12 @@ MicroEvent.mixin = (destObject) ->
     i++
 
 
-IS_MAC        = /Mac/.test(navigator.userAgent)
-
-KEY_A         = 65
 KEY_RETURN    = 13
 KEY_ESC       = 27
 KEY_UP        = 38
 KEY_DOWN      = 40
 KEY_BACKSPACE = 8
 KEY_DELETE    = 46
-KEY_SHIFT     = 16
-KEY_CMD       = if IS_MAC then 91 else 17
-KEY_CTRL      = if IS_MAC then 18 else 17
 KEY_TAB       = 9
 	  
 ### Plugin class ###
@@ -281,7 +277,7 @@ class Plugin
 	element: null,
 	options: null,
 	context: null,
-	cacheStorage: [],
+	requestCache: null,
 
 	###
 		Plugin constructor
@@ -310,20 +306,218 @@ class Plugin
 		@_init()
 
 	###
-		/////////  Events  ///////////
+		Initialize plugin
 	###
+	_init: ->
+		@_setSettings()
+		@_createElem()
+		@_setInitialValue()
+		@_initializeRequestCache()
+		@_bindEvents()
 
-	_getPublicApi: ->
-		{
-			element: @options.element
-			setValue: @setValue.bind(@)
-			clearValue: $.proxy(@clearValue, @)
-			getValue: $.proxy(@getValue, @)
-			moveToNextInList: $.proxy(@moveToNextInList, @)
-			moveToPrevInList: $.proxy(@moveToPrevInList, @)
-			search: $.proxy(@_search.bind, @)
-			setProvider: $.proxy(@setProvider, @)
-		}
+	_setSettings: ->
+		@options.closed = true
+		@options.canCloseOnBlur = true
+		@options.currentIndex = 0
+		@options.prevValue = ""
+		@options.element = $(@element)
+		@options.aclist = {}
+		@options.aclist.currentIndex = -1
+		@options.aclist.currentList = []
+		@options.createItemAvailable = false
+		if @options.mode is Mode.SINGLE
+			@options.maxSelectedOptions = 1
+
+	_setInitialValue: ->
+		if typeof @options.initialValue is "function"
+			@options.initialValue().done((initialValue) =>
+				if initialValue
+					@_addValue(initialValue)
+				@_bindEvents()
+			)
+			return
+		else if typeof @options.initialValue is "object"
+			if initialValue
+				@_addValue(@options.initialValue)
+
+	_createElem: ->
+		$element = @options.element
+
+		@options.aclist.wrapper = $element.wrap(templates.wrapperTemplate).parent()
+		@options.aclist.input = $(templates.inputTemplate).insertBefore($element)
+		@options.typeInput = $("<input type='text' />").appendTo(@options.aclist.input)
+		autoGrow(@options.typeInput)
+
+		# create hidden input below current
+		$element.hide();
+
+		@options.aclist.container = $(templates.listContainer).insertAfter(@options.aclist.input).hide()
+
+		if @options.containerWidth
+			containerWidth = @options.containerWidth
+		else
+			containerWidth = @options.element.outerWidth() - (@options.aclist.container.outerWidth() - @options.aclist.container.width())
+
+		if !@options.placeholder
+			if @options.element.attr("placeholder")
+				@options.placeholder = @options.element.attr("placeholder")
+
+		if @options.placeholder
+			placeholder = $(templates.placeholder).text(@options.placeholder);
+			@options.aclist.placeholder = placeholder
+			@options.aclist.wrapper.append(placeholder)
+
+		if @options.mode is Mode.MULTI
+			@options.aclist.input.addClass(classes.multiSelectClass)
+			@options.element.data("data", [])
+
+			if @options.removeButton
+				@options.aclist.input.addClass(classes.removeButtonClass)
+		else
+			@options.element.data("data", null)
+
+		@options.aclist.container.width(containerWidth)
+
+		@options.aclist.list = $(templates.list).appendTo(@options.aclist.container)
+
+
+	_bindEvents: ->
+
+		@options.aclist.input.on(
+			"click.richAutocomplete" : (e) =>
+				if $(e.target).hasClass(classes.optionClass)
+					$(e.target).toggleClass(classes.active)
+				else if $(e.target).parent().hasClass(classes.optionClass)
+					@removeValue($(e.target).parent().data("data"))
+				@options.typeInput.trigger("focus.richAutocomplete")
+		)
+
+		@options.aclist.placeholder.on(
+			"click.richAutocomplete" : =>
+				@options.typeInput.trigger("focus.richAutocomplete")
+		)
+
+		@options.typeInput.on(
+			"keydown.richAutocomplete": (e) =>
+				switch e.which
+					when KEY_RETURN
+						value = @options.typeInput.val()
+						valLength = value.length
+						if valLength >= @options.minLength
+							if @options.aclist.currentSelectedItem
+								@_addValue(@options.aclist.currentSelectedItem.data("data"))
+								@_closeContainer()
+							else if @options.createItemAvailable
+								@_createNewItem(@options.typeInput.val())
+							else
+								@_search(value)
+					when KEY_DOWN
+						@moveToNextInList() unless @options.closed
+						false
+					when KEY_UP
+						@moveToPrevInList() unless @options.closed
+						false
+					when KEY_ESC
+						@options.typeInput.val("")
+						@_closeContainer()
+					when KEY_BACKSPACE
+						if @options.typeInput.val() is "" and @_getSelectedOptionsCount() > 0
+							@_removeLastOption()
+					when KEY_TAB
+						@options.typeInput.val("")
+						return
+					else
+						if @options.maxSelectedOptions and @_getSelectedOptionsCount() >= @options.maxSelectedOptions
+							e.preventDefault();
+							return false
+
+			"keyup.richAutocomplete": =>
+				value = @options.typeInput.val() || ""
+				if value.length >= @options.minLength
+					if @options.prevValue isnt value
+						@options.prevValue = value
+						@_search(value)
+				else
+					@_closeContainer()
+				@trigger("type")
+
+			"focus.richAutocomplete": =>
+				@options.aclist.wrapper.addClass(classes.focusedClass)
+				@trigger("focus")
+
+			"blur.richAutocomplete" : =>
+				@options.aclist.wrapper.removeClass(classes.focusedClass)
+				# if we can close container
+				if @options.canCloseOnBlur
+					@options.typeInput.val("")
+					@_closeContainer()
+					@trigger("blur")
+
+		)
+
+		@options.aclist.container.off(".richAutocomplete").on(
+			"mousedown.richAutocomplete": =>
+				@options.canCloseOnBlur = false
+			"mouseleave.richAutocomplete": =>
+				@options.canCloseOnBlur = true
+		)
+
+		@options.aclist.container.on("click.richAutocomplete", "." + classes.listItemClass, (event) =>
+			elem = $(event.currentTarget)
+			@_addValue(elem.data("data"))
+			@_closeContainer()
+		)
+		@options.aclist.container.on("mouseover.richAutocomplete", "." + classes.listItemClass, (event) =>
+			elem = $(event.currentTarget)
+			elem.addClass(classes.active)
+			index = elem.data("index")
+			if @options.aclist.currentSelectedItem && @options.aclist.currentIndex isnt index
+				@options.aclist.currentSelectedItem.removeClass(classes.active)
+		 	@options.aclist.currentSelectedItem = elem
+		 	@options.aclist.currentIndex = index
+		)
+		@options.aclist.container.on("mouseleave.richAutocomplete", "." + classes.listItemClass, (event) =>
+			elem = $(event.currentTarget)
+			elem.removeClass(classes.active)
+		)
+		@options.aclist.container.on("click.richAutocomplete", "." + classes.createElemClass, (event) =>
+			if @options.createItemAvailable
+				@_createNewItem(@options.typeInput.val())
+		)
+		@options.aclist.container.on("mouseleave.richAutocomplete", "." + classes.createElemClass, (event) =>
+			elem = $(event.currentTarget)
+			elem.removeClass(classes.active)
+			@options.createItemAvailable = false
+		)
+		@options.aclist.container.on("mouseover.richAutocomplete", "." + classes.createElemClass, (event) =>
+			elem = $(event.currentTarget)
+			elem.addClass(classes.active)
+			@options.createItemAvailable = true
+		)
+
+	_initializeRequestCache: ->
+		cacheLimit = @options.cacheLimit
+		@requestCache = (->
+
+			sizeLimit = cacheLimit
+			cache = {}
+			cachedKeysByAge = []
+
+			get: (value) ->
+				cache[value]
+
+			set: (value, data) ->
+				if (cachedKeysByAge.length is sizeLimit)
+					requestToEvict = cachedKeysByAge.shift()
+					delete cache[requestToEvict]
+				cache[value] = data
+				cachedKeysByAge.push(value)
+
+			have: (key) ->
+				_.has(cache, key)
+
+		)()
+
 
 	### 
 		/////// Public methods /////////// 
@@ -331,14 +525,14 @@ class Plugin
 
 	setValue: (data) ->
 		@_reset()
-		@_addValue(data)
-		@trigger("set", @_getPublicApi())
+		@addValue(data)
+		@trigger("set", data)
 
 	addValue: (data) ->
 		@_addValue(data)
 
 	removeValue: (data) ->
-		selectedData = @_getSelectedData()
+		selectedData = @getValue()
 		if @options.mode is Mode.SINGLE
 			if _.isObject(data)
 				if _.isEqual(data, selectedData)
@@ -355,7 +549,7 @@ class Plugin
 
 	clearValue: ->
 		@_reset()
-		@trigger("clear", @_getPublicApi())
+		@trigger("clear")
 
 	getWrapper: ->
 		@options.aclist.wrapper
@@ -413,20 +607,27 @@ class Plugin
 		else
 			@options.element.data("data", [])
 		@options.aclist.input.children().not("input").remove()
-		if @_getSelectedData()
-			@options.element.val(@options.formatSaveData(@_getSelectedData()))
+		@options.aclist.input.removeClass(classes.hasItems)
+		@options.prevValue = ""
+		if @getValue()
+			@options.element.val(@options.formatSaveData(@getValue()))
 		else
 			@options.element.val("")
 		if @options.aclist.wrapper.hasClass(classes.selectedClass)
 			@options.aclist.wrapper.removeClass(classes.selectedClass)
 
 	_addValue: (data) ->
-		existingData = @options.element.data("data")
+		existingData = @getValue()
 		if _.isArray(data)
 			if _.isArray(existingData)
-				canAdd = @options.maxSelectedOptions - existingData.length
-				if canAdd > 0
-					data = _.first(data, canAdd)
+				if @options.maxSelectedOptions
+					canAdd = @options.maxSelectedOptions - existingData.length
+					if canAdd > 0
+						data = _.first(data, canAdd)
+						_.each(data, (item) =>
+							@_addOneItem(item)
+						)
+				else
 					_.each(data, (item) =>
 						@_addOneItem(item)
 					)
@@ -436,18 +637,21 @@ class Plugin
 			return
 		else if _.isObject(data)
 			if _.isArray(existingData)
-				if (@options.maxSelectedOptions - existingData.length) > 0
+				if @options.maxSelectedOptions
+					if (@options.maxSelectedOptions - existingData.length) > 0
+						@_addOneItem(data)
+				else
 					@_addOneItem(data)
 			else
 				if existingData is null
 					@_addOneItem(data)
-		existingData = @options.element.data("data")
+		existingData = @getValue()
 		@options.element.val(@options.formatSaveData(existingData)).trigger("change")
 		@options.typeInput.val("")
 		@options.typeInput.trigger("update")
 
 	_addOneItem: (data) ->
-		existingData = @options.element.data("data")
+		existingData = @getValue()
 		index = 0
 		if @options.mode is Mode.SINGLE
 			@options.element.data("data", data)
@@ -473,32 +677,30 @@ class Plugin
 			}))
 		option.data("data", data)
 		option.insertBefore(@options.typeInput)
-		@trigger("add", @_getPublicApi())
-		if @options.mode is Mode.SINGLE
-			@trigger("set", @_getPublicApi())
+		@trigger("add", data)
+		if @options.mode is Mode.MULTI
+			@options.aclist.input.addClass(classes.hasItems)
 
-	_getSelectedData: ->
-		@options.element.data("data")
 
 	_getSelectedOptionsCount: ->
 		if @options.mode is Mode.SINGLE
-			if @options.element.data("data") is null
+			if @getValue() is null
 				return 0
 			else
 				return 1
 		else
-			return @options.element.data("data").length
+			return @getValue().length
 
 	_removeValueByIndex: (index) ->
 		if @options.mode is Mode.SINGLE and index is 0
-			@trigger("remove", @_getPublicApi())
+			@trigger("remove", @getValue())
 			@clearValue()
 		else
-			selectedData = @_getSelectedData()
+			selectedData = @getValue()
 			selectedData.splice(index, 1)
 			@options.aclist.input.children().not("input").eq(index).remove()
 			@options.element.data("data", selectedData)
-			@trigger("remove", @_getPublicApi())
+			@trigger("remove", selectedData)
 			if selectedData.length is 0
 				@clearValue()
 			else
@@ -515,26 +717,8 @@ class Plugin
 				)
 			else if @_getSelectedOptionsCount() > 0
 				@_removeValueByIndex(@_getSelectedOptionsCount() - 1)
-
-	_init: ->
-		@_setSettings()
-		@_createElem()
-
-		if typeof @options.initialValue is "function"
-			@options.initialValue().done((initialValue) =>
-				if initialValue
-					@_addValue(initialValue)
-				@_bindEvents()
-			)
-			return
-		else if typeof @options.initialValue is "object"
-			if initialValue
-				@_addValue(@options.initialValue)
-
-		if @options.mode is Mode.SINGLE
-			@options.maxSelectedOptions = 1
-
-		@_bindEvents()
+		@options.typeInput.val("")
+		@options.prevValue = ""
 
 	_closeContainer: ->
 		@options.aclist.currentList = []
@@ -548,18 +732,16 @@ class Plugin
 		@options.aclist.container.show()
 		@options.closed = false
 
-	_search: ->
-		textVal = @options.typeInput.val()
-		@_openContainer()
-		if @options.cache && @_haveValuesInCache(textVal)
-			@_cacheProvider(@options.textVal).done((response) =>
-				@_onSearchFinish(textVal, response)
+	_search: (value) ->
+		if @options.cache && @requestCache.have(value)
+			@_cacheProvider(value).done((response) =>
+				@_onSearchFinish(value, response)
 			)
 		else
 			@options.aclist.input.addClass(classes.loadingClass)
-			@options.provider(textVal).done((response) =>
+			@options.provider(value).done((response) =>
 				@options.aclist.input.removeClass(classes.loadingClass)
-				@_onSearchFinish(textVal, response)
+				@_onSearchFinish(value, response)
 			)
 
 	_onSearchFinish: (value, response) ->
@@ -579,187 +761,18 @@ class Plugin
 	_cacheProvider: (value) ->
 		value = value.toLowerCase()
 		deferred = new $.Deferred()
-		if @_haveValuesInCache(value)
-			deferred.resolve(@cacheStorage[value])
+		result = @requestCache.get(value)
+		if result
+			deferred.resolve(result)
 		else
 			deferred.reject()
 
 	_cacheValues: (value, data) ->
 		value = value.toLowerCase()
-		@cacheStorage[value] = data
-		
-	_setSettings: ->
-		@options.closed = true
-		@options.canCloseOnBlur = true
-		@options.currentIndex = 0
-		@options.closed = true
-		@options.textVal = ""
-		@options.element = $(@element)
-		@options.aclist = {}
-		@options.aclist.currentIndex = -1
-		@options.aclist.currentList = []
-		@options.createItemAvailable = false
-
-	_createElem: ->
-		$element = @options.element
-
-		@options.aclist.wrapper = $element.wrap(templates.wrapperTemplate).parent()
-		@options.aclist.input = $(templates.inputTemplate).insertBefore($element)
-		@options.typeInput = $("<input type='text' />").appendTo(@options.aclist.input)
-		autoGrow(@options.typeInput)
-
-		# create hidden input below current
-		$element.hide();
-
-		@options.aclist.container = $(templates.listContainer).insertAfter(@options.aclist.input).hide()
-
-		if @options.containerWidth
-			containerWidth = @options.containerWidth
-		else
-			containerWidth = @options.element.outerWidth() - (@options.aclist.container.outerWidth() - @options.aclist.container.width())
-
-		if !@options.placeholder
-			if @options.element.attr("placeholder")
-				@options.placeholder = @options.element.attr("placeholder")
-
-		if @options.placeholder
-			placeholder = $(templates.placeholder).text(@options.placeholder);
-			@options.aclist.placeholder = placeholder
-			@options.aclist.wrapper.append(placeholder)
-
-		if @options.mode is Mode.MULTI
-			@options.aclist.input.addClass(classes.multiSelectClass)
-			@options.element.data("data", [])
-
-			if @options.removeButton
-				@options.aclist.input.addClass(classes.removeButtonClass)
-		else
-			@options.element.data("data", null)
-
-		@options.aclist.container.width(containerWidth)
-
-		@options.aclist.list = $(templates.list).appendTo(@options.aclist.container)
-
-	_bindEvents: ->
-
-		@options.aclist.input.on(
-			"click.richAutocomplete" : (e) =>
-				if $(e.target).hasClass(classes.optionClass)
-					$(e.target).toggleClass(classes.active)
-				else if $(e.target).parent().hasClass(classes.optionClass)
-					@removeValue($(e.target).parent().data("data"))
-				@options.typeInput.trigger("focus.richAutocomplete")
-		)
-
-		@options.aclist.placeholder.on(
-			"click.richAutocomplete" : =>
-				@options.typeInput.trigger("focus.richAutocomplete")
-		)
-
-		@options.typeInput.data("timeout", null)
-
-		@options.typeInput.on("change paste keyup", (e) =>
-			clearTimeout(@options.typeInput.data("timeout"))
-			@options.typeInput.data("timeout", setTimeout( =>
-				newValue = @options.typeInput.val()
-				if newValue.length >= @options.minLength
-						if @options.prevValue isnt newValue
-							@options.prevValue = newValue
-							@_search()					
-				else
-					@_closeContainer()
-			, 150))
-		)
-
-		@options.typeInput.on(
-			"keydown.richAutocomplete": (e) =>
-				switch e.which
-					when KEY_RETURN
-						valLength = @options.typeInput.val().length
-						if valLength >= @options.minLength
-							if @options.aclist.currentSelectedItem
-								@_addValue(@options.aclist.currentSelectedItem.data("data"))
-								@_closeContainer()
-							else if @options.createItemAvailable
-								@_createNewItem(@options.typeInput.val())
-							else
-								@_search()
-					when KEY_DOWN
-						@moveToNextInList() unless @options.closed
-						false
-					when KEY_UP
-						@moveToPrevInList() unless @options.closed
-						false
-					when KEY_ESC
-						@options.typeInput.val("")
-						@_closeContainer()
-					when KEY_BACKSPACE
-						if @options.typeInput.val() is "" and @_getSelectedOptionsCount() > 0
-							@_removeLastOption()
-					when KEY_TAB
-						@options.typeInput.val("")
-						return
-					else
-						if @_getSelectedOptionsCount() >= @options.maxSelectedOptions
-							e.preventDefault();
-							return false
-
-			"focus.richAutocomplete": =>
-				@options.aclist.wrapper.addClass(classes.focusedClass)
-				@trigger("focus", @_getPublicApi())
-
-			"blur.richAutocomplete" : =>
-				@options.aclist.wrapper.removeClass(classes.focusedClass)
-				# if we can close container
-				if @options.canCloseOnBlur
-					@options.typeInput.val("")
-					@_closeContainer()
-					@trigger("blur", @_getPublicApi())
-
-		)
-
-		@options.aclist.container.off(".richAutocomplete").on(
-			"mousedown.richAutocomplete": =>
-				@options.canCloseOnBlur = false
-			"mouseleave.richAutocomplete": =>
-				@options.canCloseOnBlur = true
-		)
-
-		@options.aclist.container.on("click.richAutocomplete", "." + classes.listItemClass, (event) =>
-			elem = $(event.currentTarget)
-			@_addValue(elem.data("data"))
-			@_closeContainer()
-		)
-		@options.aclist.container.on("mouseover.richAutocomplete", "." + classes.listItemClass, (event) =>
-			elem = $(event.currentTarget)
-			elem.addClass(classes.active)
-			index = elem.data("index")
-			if @options.aclist.currentSelectedItem && @options.aclist.currentIndex isnt index
-				@options.aclist.currentSelectedItem.removeClass(classes.active)
-		 	@options.aclist.currentSelectedItem = elem
-		 	@options.aclist.currentIndex = index
-		)
-		@options.aclist.container.on("mouseleave.richAutocomplete", "." + classes.listItemClass, (event) =>
-			elem = $(event.currentTarget)
-			elem.removeClass(classes.active)
-		)
-		@options.aclist.container.on("click.richAutocomplete", "." + classes.createElemClass, (event) =>
-			if @options.createItemAvailable
-				@_createNewItem(@options.typeInput.val())
-		)
-		@options.aclist.container.on("mouseleave.richAutocomplete", "." + classes.createElemClass, (event) =>
-			elem = $(event.currentTarget)
-			elem.removeClass(classes.active)
-			@options.createItemAvailable = false
-		)
-		@options.aclist.container.on("mouseover.richAutocomplete", "." + classes.createElemClass, (event) =>
-			elem = $(event.currentTarget)
-			elem.addClass(classes.active)
-			@options.createItemAvailable = true
-		)
+		@requestCache.set(value, data)
 
 	_onLoadList: (data, value) ->
-		alreadySelected = @options.element.data("data")
+		alreadySelected = @getValue()
 		data = _.filter(data, (item) ->
 			result = true
 			_.each(alreadySelected, (selectedItem) ->
@@ -792,6 +805,7 @@ class Plugin
 				@_renderEmptyElem(value)
 			else if @options.additionalMode is AdditionalMode.CREATE
 				@_renderCreateElem(value)
+		@_openContainer()
 
 	_renderEmptyElem: (value) ->
 		notFoundTemplate = $(templates.emptyTemplate).html(@options.render.emptyTemplate(value)).appendTo(@options.aclist.list)

@@ -1,6 +1,6 @@
 (function() {
   "use strict";
-  var AdditionalMode, IS_MAC, KEY_A, KEY_BACKSPACE, KEY_CMD, KEY_CTRL, KEY_DELETE, KEY_DOWN, KEY_ESC, KEY_RETURN, KEY_SHIFT, KEY_TAB, KEY_UP, MicroEvent, Mode, Plugin, autoGrow, classes, defaults, getSelection, innerHighlight, measureString, pluginName, templates, transferStyles;
+  var AdditionalMode, KEY_BACKSPACE, KEY_DELETE, KEY_DOWN, KEY_ESC, KEY_RETURN, KEY_TAB, KEY_UP, MicroEvent, Mode, Plugin, autoGrow, classes, defaults, getSelection, innerHighlight, measureString, pluginName, templates, transferStyles;
 
   pluginName = "richAutocomplete";
 
@@ -31,7 +31,8 @@
     listItemClass: "-richAutocomplete__list-item",
     highlightClass: "-highlight",
     multiSelectClass: "-richAutocomplete__multi-select",
-    loadingClass: "-richAutocomplete__loading"
+    loadingClass: "-richAutocomplete__loading",
+    hasItems: "-has-items"
   };
 
   Mode = {
@@ -54,6 +55,7 @@
     emptyTemplate: "Nothing was found for <i><%= value %></i>",
     createTemplate: "Create <i><%= value %></i>...",
     cache: false,
+    cacheLimit: 20,
     highlightResults: true,
     maxViewedCount: 10,
     placeholder: false,
@@ -74,7 +76,7 @@
     },
     mode: Mode.SINGLE,
     additionalMode: AdditionalMode.EMPTY,
-    maxSelectedOptions: 10,
+    maxSelectedOptions: false,
     removeButton: false
   };
 
@@ -311,10 +313,6 @@
     return _results;
   };
 
-  IS_MAC = /Mac/.test(navigator.userAgent);
-
-  KEY_A = 65;
-
   KEY_RETURN = 13;
 
   KEY_ESC = 27;
@@ -326,12 +324,6 @@
   KEY_BACKSPACE = 8;
 
   KEY_DELETE = 46;
-
-  KEY_SHIFT = 16;
-
-  KEY_CMD = IS_MAC ? 91 : 17;
-
-  KEY_CTRL = IS_MAC ? 18 : 17;
 
   KEY_TAB = 9;
 
@@ -345,7 +337,7 @@
 
     Plugin.prototype.context = null;
 
-    Plugin.prototype.cacheStorage = [];
+    Plugin.prototype.requestCache = null;
 
     /*
         Plugin constructor
@@ -383,21 +375,250 @@
     }
 
     /*
-        /////////  Events  ///////////
+        Initialize plugin
     */
 
 
-    Plugin.prototype._getPublicApi = function() {
-      return {
-        element: this.options.element,
-        setValue: this.setValue.bind(this),
-        clearValue: $.proxy(this.clearValue, this),
-        getValue: $.proxy(this.getValue, this),
-        moveToNextInList: $.proxy(this.moveToNextInList, this),
-        moveToPrevInList: $.proxy(this.moveToPrevInList, this),
-        search: $.proxy(this._search.bind, this),
-        setProvider: $.proxy(this.setProvider, this)
-      };
+    Plugin.prototype._init = function() {
+      this._setSettings();
+      this._createElem();
+      this._setInitialValue();
+      this._initializeRequestCache();
+      return this._bindEvents();
+    };
+
+    Plugin.prototype._setSettings = function() {
+      this.options.closed = true;
+      this.options.canCloseOnBlur = true;
+      this.options.currentIndex = 0;
+      this.options.prevValue = "";
+      this.options.element = $(this.element);
+      this.options.aclist = {};
+      this.options.aclist.currentIndex = -1;
+      this.options.aclist.currentList = [];
+      this.options.createItemAvailable = false;
+      if (this.options.mode === Mode.SINGLE) {
+        return this.options.maxSelectedOptions = 1;
+      }
+    };
+
+    Plugin.prototype._setInitialValue = function() {
+      var _this = this;
+      if (typeof this.options.initialValue === "function") {
+        this.options.initialValue().done(function(initialValue) {
+          if (initialValue) {
+            _this._addValue(initialValue);
+          }
+          return _this._bindEvents();
+        });
+      } else if (typeof this.options.initialValue === "object") {
+        if (initialValue) {
+          return this._addValue(this.options.initialValue);
+        }
+      }
+    };
+
+    Plugin.prototype._createElem = function() {
+      var $element, containerWidth, placeholder;
+      $element = this.options.element;
+      this.options.aclist.wrapper = $element.wrap(templates.wrapperTemplate).parent();
+      this.options.aclist.input = $(templates.inputTemplate).insertBefore($element);
+      this.options.typeInput = $("<input type='text' />").appendTo(this.options.aclist.input);
+      autoGrow(this.options.typeInput);
+      $element.hide();
+      this.options.aclist.container = $(templates.listContainer).insertAfter(this.options.aclist.input).hide();
+      if (this.options.containerWidth) {
+        containerWidth = this.options.containerWidth;
+      } else {
+        containerWidth = this.options.element.outerWidth() - (this.options.aclist.container.outerWidth() - this.options.aclist.container.width());
+      }
+      if (!this.options.placeholder) {
+        if (this.options.element.attr("placeholder")) {
+          this.options.placeholder = this.options.element.attr("placeholder");
+        }
+      }
+      if (this.options.placeholder) {
+        placeholder = $(templates.placeholder).text(this.options.placeholder);
+        this.options.aclist.placeholder = placeholder;
+        this.options.aclist.wrapper.append(placeholder);
+      }
+      if (this.options.mode === Mode.MULTI) {
+        this.options.aclist.input.addClass(classes.multiSelectClass);
+        this.options.element.data("data", []);
+        if (this.options.removeButton) {
+          this.options.aclist.input.addClass(classes.removeButtonClass);
+        }
+      } else {
+        this.options.element.data("data", null);
+      }
+      this.options.aclist.container.width(containerWidth);
+      return this.options.aclist.list = $(templates.list).appendTo(this.options.aclist.container);
+    };
+
+    Plugin.prototype._bindEvents = function() {
+      var _this = this;
+      this.options.aclist.input.on({
+        "click.richAutocomplete": function(e) {
+          if ($(e.target).hasClass(classes.optionClass)) {
+            $(e.target).toggleClass(classes.active);
+          } else if ($(e.target).parent().hasClass(classes.optionClass)) {
+            _this.removeValue($(e.target).parent().data("data"));
+          }
+          return _this.options.typeInput.trigger("focus.richAutocomplete");
+        }
+      });
+      this.options.aclist.placeholder.on({
+        "click.richAutocomplete": function() {
+          return _this.options.typeInput.trigger("focus.richAutocomplete");
+        }
+      });
+      this.options.typeInput.on({
+        "keydown.richAutocomplete": function(e) {
+          var valLength, value;
+          switch (e.which) {
+            case KEY_RETURN:
+              value = _this.options.typeInput.val();
+              valLength = value.length;
+              if (valLength >= _this.options.minLength) {
+                if (_this.options.aclist.currentSelectedItem) {
+                  _this._addValue(_this.options.aclist.currentSelectedItem.data("data"));
+                  return _this._closeContainer();
+                } else if (_this.options.createItemAvailable) {
+                  return _this._createNewItem(_this.options.typeInput.val());
+                } else {
+                  return _this._search(value);
+                }
+              }
+              break;
+            case KEY_DOWN:
+              if (!_this.options.closed) {
+                _this.moveToNextInList();
+              }
+              return false;
+            case KEY_UP:
+              if (!_this.options.closed) {
+                _this.moveToPrevInList();
+              }
+              return false;
+            case KEY_ESC:
+              _this.options.typeInput.val("");
+              return _this._closeContainer();
+            case KEY_BACKSPACE:
+              if (_this.options.typeInput.val() === "" && _this._getSelectedOptionsCount() > 0) {
+                return _this._removeLastOption();
+              }
+              break;
+            case KEY_TAB:
+              _this.options.typeInput.val("");
+              break;
+            default:
+              if (_this.options.maxSelectedOptions && _this._getSelectedOptionsCount() >= _this.options.maxSelectedOptions) {
+                e.preventDefault();
+                return false;
+              }
+          }
+        },
+        "keyup.richAutocomplete": function() {
+          var value;
+          value = _this.options.typeInput.val() || "";
+          if (value.length >= _this.options.minLength) {
+            if (_this.options.prevValue !== value) {
+              _this.options.prevValue = value;
+              _this._search(value);
+            }
+          } else {
+            _this._closeContainer();
+          }
+          return _this.trigger("type");
+        },
+        "focus.richAutocomplete": function() {
+          _this.options.aclist.wrapper.addClass(classes.focusedClass);
+          return _this.trigger("focus");
+        },
+        "blur.richAutocomplete": function() {
+          _this.options.aclist.wrapper.removeClass(classes.focusedClass);
+          if (_this.options.canCloseOnBlur) {
+            _this.options.typeInput.val("");
+            _this._closeContainer();
+            return _this.trigger("blur");
+          }
+        }
+      });
+      this.options.aclist.container.off(".richAutocomplete").on({
+        "mousedown.richAutocomplete": function() {
+          return _this.options.canCloseOnBlur = false;
+        },
+        "mouseleave.richAutocomplete": function() {
+          return _this.options.canCloseOnBlur = true;
+        }
+      });
+      this.options.aclist.container.on("click.richAutocomplete", "." + classes.listItemClass, function(event) {
+        var elem;
+        elem = $(event.currentTarget);
+        _this._addValue(elem.data("data"));
+        return _this._closeContainer();
+      });
+      this.options.aclist.container.on("mouseover.richAutocomplete", "." + classes.listItemClass, function(event) {
+        var elem, index;
+        elem = $(event.currentTarget);
+        elem.addClass(classes.active);
+        index = elem.data("index");
+        if (_this.options.aclist.currentSelectedItem && _this.options.aclist.currentIndex !== index) {
+          _this.options.aclist.currentSelectedItem.removeClass(classes.active);
+          _this.options.aclist.currentSelectedItem = elem;
+          return _this.options.aclist.currentIndex = index;
+        }
+      });
+      this.options.aclist.container.on("mouseleave.richAutocomplete", "." + classes.listItemClass, function(event) {
+        var elem;
+        elem = $(event.currentTarget);
+        return elem.removeClass(classes.active);
+      });
+      this.options.aclist.container.on("click.richAutocomplete", "." + classes.createElemClass, function(event) {
+        if (_this.options.createItemAvailable) {
+          return _this._createNewItem(_this.options.typeInput.val());
+        }
+      });
+      this.options.aclist.container.on("mouseleave.richAutocomplete", "." + classes.createElemClass, function(event) {
+        var elem;
+        elem = $(event.currentTarget);
+        elem.removeClass(classes.active);
+        return _this.options.createItemAvailable = false;
+      });
+      return this.options.aclist.container.on("mouseover.richAutocomplete", "." + classes.createElemClass, function(event) {
+        var elem;
+        elem = $(event.currentTarget);
+        elem.addClass(classes.active);
+        return _this.options.createItemAvailable = true;
+      });
+    };
+
+    Plugin.prototype._initializeRequestCache = function() {
+      var cacheLimit;
+      cacheLimit = this.options.cacheLimit;
+      return this.requestCache = (function() {
+        var cache, cachedKeysByAge, sizeLimit;
+        sizeLimit = cacheLimit;
+        cache = {};
+        cachedKeysByAge = [];
+        return {
+          get: function(value) {
+            return cache[value];
+          },
+          set: function(value, data) {
+            var requestToEvict;
+            if (cachedKeysByAge.length === sizeLimit) {
+              requestToEvict = cachedKeysByAge.shift();
+              delete cache[requestToEvict];
+            }
+            cache[value] = data;
+            return cachedKeysByAge.push(value);
+          },
+          have: function(key) {
+            return _.has(cache, key);
+          }
+        };
+      })();
     };
 
     /* 
@@ -407,8 +628,8 @@
 
     Plugin.prototype.setValue = function(data) {
       this._reset();
-      this._addValue(data);
-      return this.trigger("set", this._getPublicApi());
+      this.addValue(data);
+      return this.trigger("set", data);
     };
 
     Plugin.prototype.addValue = function(data) {
@@ -418,7 +639,7 @@
     Plugin.prototype.removeValue = function(data) {
       var selectedData,
         _this = this;
-      selectedData = this._getSelectedData();
+      selectedData = this.getValue();
       if (this.options.mode === Mode.SINGLE) {
         if (_.isObject(data)) {
           if (_.isEqual(data, selectedData)) {
@@ -441,7 +662,7 @@
 
     Plugin.prototype.clearValue = function() {
       this._reset();
-      return this.trigger("clear", this._getPublicApi());
+      return this.trigger("clear");
     };
 
     Plugin.prototype.getWrapper = function() {
@@ -515,8 +736,10 @@
         this.options.element.data("data", []);
       }
       this.options.aclist.input.children().not("input").remove();
-      if (this._getSelectedData()) {
-        this.options.element.val(this.options.formatSaveData(this._getSelectedData()));
+      this.options.aclist.input.removeClass(classes.hasItems);
+      this.options.prevValue = "";
+      if (this.getValue()) {
+        this.options.element.val(this.options.formatSaveData(this.getValue()));
       } else {
         this.options.element.val("");
       }
@@ -528,12 +751,18 @@
     Plugin.prototype._addValue = function(data) {
       var canAdd, existingData,
         _this = this;
-      existingData = this.options.element.data("data");
+      existingData = this.getValue();
       if (_.isArray(data)) {
         if (_.isArray(existingData)) {
-          canAdd = this.options.maxSelectedOptions - existingData.length;
-          if (canAdd > 0) {
-            data = _.first(data, canAdd);
+          if (this.options.maxSelectedOptions) {
+            canAdd = this.options.maxSelectedOptions - existingData.length;
+            if (canAdd > 0) {
+              data = _.first(data, canAdd);
+              _.each(data, function(item) {
+                return _this._addOneItem(item);
+              });
+            }
+          } else {
             _.each(data, function(item) {
               return _this._addOneItem(item);
             });
@@ -546,7 +775,11 @@
         return;
       } else if (_.isObject(data)) {
         if (_.isArray(existingData)) {
-          if ((this.options.maxSelectedOptions - existingData.length) > 0) {
+          if (this.options.maxSelectedOptions) {
+            if ((this.options.maxSelectedOptions - existingData.length) > 0) {
+              this._addOneItem(data);
+            }
+          } else {
             this._addOneItem(data);
           }
         } else {
@@ -555,7 +788,7 @@
           }
         }
       }
-      existingData = this.options.element.data("data");
+      existingData = this.getValue();
       this.options.element.val(this.options.formatSaveData(existingData)).trigger("change");
       this.options.typeInput.val("");
       return this.options.typeInput.trigger("update");
@@ -563,7 +796,7 @@
 
     Plugin.prototype._addOneItem = function(data) {
       var alreadyExists, existingData, index, option;
-      existingData = this.options.element.data("data");
+      existingData = this.getValue();
       index = 0;
       if (this.options.mode === Mode.SINGLE) {
         this.options.element.data("data", data);
@@ -593,39 +826,35 @@
       }
       option.data("data", data);
       option.insertBefore(this.options.typeInput);
-      this.trigger("add", this._getPublicApi());
-      if (this.options.mode === Mode.SINGLE) {
-        return this.trigger("set", this._getPublicApi());
+      this.trigger("add", data);
+      if (this.options.mode === Mode.MULTI) {
+        return this.options.aclist.input.addClass(classes.hasItems);
       }
-    };
-
-    Plugin.prototype._getSelectedData = function() {
-      return this.options.element.data("data");
     };
 
     Plugin.prototype._getSelectedOptionsCount = function() {
       if (this.options.mode === Mode.SINGLE) {
-        if (this.options.element.data("data") === null) {
+        if (this.getValue() === null) {
           return 0;
         } else {
           return 1;
         }
       } else {
-        return this.options.element.data("data").length;
+        return this.getValue().length;
       }
     };
 
     Plugin.prototype._removeValueByIndex = function(index) {
       var selectedData;
       if (this.options.mode === Mode.SINGLE && index === 0) {
-        this.trigger("remove", this._getPublicApi());
+        this.trigger("remove", this.getValue());
         return this.clearValue();
       } else {
-        selectedData = this._getSelectedData();
+        selectedData = this.getValue();
         selectedData.splice(index, 1);
         this.options.aclist.input.children().not("input").eq(index).remove();
         this.options.element.data("data", selectedData);
-        this.trigger("remove", this._getPublicApi());
+        this.trigger("remove", selectedData);
         if (selectedData.length === 0) {
           return this.clearValue();
         } else {
@@ -638,40 +867,19 @@
       var selectedData,
         _this = this;
       if (this.options.mode === "single") {
-        return this._removeValueByIndex(0);
+        this._removeValueByIndex(0);
       } else {
         selectedData = this.options.aclist.input.find("." + classes.optionClass + "." + classes.active);
         if (selectedData.length > 0) {
-          return _.each(selectedData, function(item) {
+          _.each(selectedData, function(item) {
             return _this.removeValue($(item).data("data"));
           });
         } else if (this._getSelectedOptionsCount() > 0) {
-          return this._removeValueByIndex(this._getSelectedOptionsCount() - 1);
+          this._removeValueByIndex(this._getSelectedOptionsCount() - 1);
         }
       }
-    };
-
-    Plugin.prototype._init = function() {
-      var _this = this;
-      this._setSettings();
-      this._createElem();
-      if (typeof this.options.initialValue === "function") {
-        this.options.initialValue().done(function(initialValue) {
-          if (initialValue) {
-            _this._addValue(initialValue);
-          }
-          return _this._bindEvents();
-        });
-        return;
-      } else if (typeof this.options.initialValue === "object") {
-        if (initialValue) {
-          this._addValue(this.options.initialValue);
-        }
-      }
-      if (this.options.mode === Mode.SINGLE) {
-        this.options.maxSelectedOptions = 1;
-      }
-      return this._bindEvents();
+      this.options.typeInput.val("");
+      return this.options.prevValue = "";
     };
 
     Plugin.prototype._closeContainer = function() {
@@ -688,20 +896,17 @@
       return this.options.closed = false;
     };
 
-    Plugin.prototype._search = function() {
-      var textVal,
-        _this = this;
-      textVal = this.options.typeInput.val();
-      this._openContainer();
-      if (this.options.cache && this._haveValuesInCache(textVal)) {
-        return this._cacheProvider(this.options.textVal).done(function(response) {
-          return _this._onSearchFinish(textVal, response);
+    Plugin.prototype._search = function(value) {
+      var _this = this;
+      if (this.options.cache && this.requestCache.have(value)) {
+        return this._cacheProvider(value).done(function(response) {
+          return _this._onSearchFinish(value, response);
         });
       } else {
         this.options.aclist.input.addClass(classes.loadingClass);
-        return this.options.provider(textVal).done(function(response) {
+        return this.options.provider(value).done(function(response) {
           _this.options.aclist.input.removeClass(classes.loadingClass);
-          return _this._onSearchFinish(textVal, response);
+          return _this._onSearchFinish(value, response);
         });
       }
     };
@@ -725,11 +930,12 @@
     };
 
     Plugin.prototype._cacheProvider = function(value) {
-      var deferred;
+      var deferred, result;
       value = value.toLowerCase();
       deferred = new $.Deferred();
-      if (this._haveValuesInCache(value)) {
-        return deferred.resolve(this.cacheStorage[value]);
+      result = this.requestCache.get(value);
+      if (result) {
+        return deferred.resolve(result);
       } else {
         return deferred.reject();
       }
@@ -737,203 +943,13 @@
 
     Plugin.prototype._cacheValues = function(value, data) {
       value = value.toLowerCase();
-      return this.cacheStorage[value] = data;
-    };
-
-    Plugin.prototype._setSettings = function() {
-      this.options.closed = true;
-      this.options.canCloseOnBlur = true;
-      this.options.currentIndex = 0;
-      this.options.closed = true;
-      this.options.textVal = "";
-      this.options.element = $(this.element);
-      this.options.aclist = {};
-      this.options.aclist.currentIndex = -1;
-      this.options.aclist.currentList = [];
-      return this.options.createItemAvailable = false;
-    };
-
-    Plugin.prototype._createElem = function() {
-      var $element, containerWidth, placeholder;
-      $element = this.options.element;
-      this.options.aclist.wrapper = $element.wrap(templates.wrapperTemplate).parent();
-      this.options.aclist.input = $(templates.inputTemplate).insertBefore($element);
-      this.options.typeInput = $("<input type='text' />").appendTo(this.options.aclist.input);
-      autoGrow(this.options.typeInput);
-      $element.hide();
-      this.options.aclist.container = $(templates.listContainer).insertAfter(this.options.aclist.input).hide();
-      if (this.options.containerWidth) {
-        containerWidth = this.options.containerWidth;
-      } else {
-        containerWidth = this.options.element.outerWidth() - (this.options.aclist.container.outerWidth() - this.options.aclist.container.width());
-      }
-      if (!this.options.placeholder) {
-        if (this.options.element.attr("placeholder")) {
-          this.options.placeholder = this.options.element.attr("placeholder");
-        }
-      }
-      if (this.options.placeholder) {
-        placeholder = $(templates.placeholder).text(this.options.placeholder);
-        this.options.aclist.placeholder = placeholder;
-        this.options.aclist.wrapper.append(placeholder);
-      }
-      if (this.options.mode === Mode.MULTI) {
-        this.options.aclist.input.addClass(classes.multiSelectClass);
-        this.options.element.data("data", []);
-        if (this.options.removeButton) {
-          this.options.aclist.input.addClass(classes.removeButtonClass);
-        }
-      } else {
-        this.options.element.data("data", null);
-      }
-      this.options.aclist.container.width(containerWidth);
-      return this.options.aclist.list = $(templates.list).appendTo(this.options.aclist.container);
-    };
-
-    Plugin.prototype._bindEvents = function() {
-      var _this = this;
-      this.options.aclist.input.on({
-        "click.richAutocomplete": function(e) {
-          if ($(e.target).hasClass(classes.optionClass)) {
-            $(e.target).toggleClass(classes.active);
-          } else if ($(e.target).parent().hasClass(classes.optionClass)) {
-            _this.removeValue($(e.target).parent().data("data"));
-          }
-          return _this.options.typeInput.trigger("focus.richAutocomplete");
-        }
-      });
-      this.options.aclist.placeholder.on({
-        "click.richAutocomplete": function() {
-          return _this.options.typeInput.trigger("focus.richAutocomplete");
-        }
-      });
-      this.options.typeInput.data("timeout", null);
-      this.options.typeInput.on("change paste keyup", function(e) {
-        clearTimeout(_this.options.typeInput.data("timeout"));
-        return _this.options.typeInput.data("timeout", setTimeout(function() {
-          var newValue;
-          newValue = _this.options.typeInput.val();
-          if (newValue.length >= _this.options.minLength) {
-            if (_this.options.prevValue !== newValue) {
-              _this.options.prevValue = newValue;
-              return _this._search();
-            }
-          } else {
-            return _this._closeContainer();
-          }
-        }, 150));
-      });
-      this.options.typeInput.on({
-        "keydown.richAutocomplete": function(e) {
-          var valLength;
-          switch (e.which) {
-            case KEY_RETURN:
-              valLength = _this.options.typeInput.val().length;
-              if (valLength >= _this.options.minLength) {
-                if (_this.options.aclist.currentSelectedItem) {
-                  _this._addValue(_this.options.aclist.currentSelectedItem.data("data"));
-                  return _this._closeContainer();
-                } else if (_this.options.createItemAvailable) {
-                  return _this._createNewItem(_this.options.typeInput.val());
-                } else {
-                  return _this._search();
-                }
-              }
-              break;
-            case KEY_DOWN:
-              if (!_this.options.closed) {
-                _this.moveToNextInList();
-              }
-              return false;
-            case KEY_UP:
-              if (!_this.options.closed) {
-                _this.moveToPrevInList();
-              }
-              return false;
-            case KEY_ESC:
-              _this.options.typeInput.val("");
-              return _this._closeContainer();
-            case KEY_BACKSPACE:
-              if (_this.options.typeInput.val() === "" && _this._getSelectedOptionsCount() > 0) {
-                return _this._removeLastOption();
-              }
-              break;
-            case KEY_TAB:
-              _this.options.typeInput.val("");
-              break;
-            default:
-              if (_this._getSelectedOptionsCount() >= _this.options.maxSelectedOptions) {
-                e.preventDefault();
-                return false;
-              }
-          }
-        },
-        "focus.richAutocomplete": function() {
-          _this.options.aclist.wrapper.addClass(classes.focusedClass);
-          return _this.trigger("focus", _this._getPublicApi());
-        },
-        "blur.richAutocomplete": function() {
-          _this.options.aclist.wrapper.removeClass(classes.focusedClass);
-          if (_this.options.canCloseOnBlur) {
-            _this.options.typeInput.val("");
-            _this._closeContainer();
-            return _this.trigger("blur", _this._getPublicApi());
-          }
-        }
-      });
-      this.options.aclist.container.off(".richAutocomplete").on({
-        "mousedown.richAutocomplete": function() {
-          return _this.options.canCloseOnBlur = false;
-        },
-        "mouseleave.richAutocomplete": function() {
-          return _this.options.canCloseOnBlur = true;
-        }
-      });
-      this.options.aclist.container.on("click.richAutocomplete", "." + classes.listItemClass, function(event) {
-        var elem;
-        elem = $(event.currentTarget);
-        _this._addValue(elem.data("data"));
-        return _this._closeContainer();
-      });
-      this.options.aclist.container.on("mouseover.richAutocomplete", "." + classes.listItemClass, function(event) {
-        var elem, index;
-        elem = $(event.currentTarget);
-        elem.addClass(classes.active);
-        index = elem.data("index");
-        if (_this.options.aclist.currentSelectedItem && _this.options.aclist.currentIndex !== index) {
-          _this.options.aclist.currentSelectedItem.removeClass(classes.active);
-          _this.options.aclist.currentSelectedItem = elem;
-          return _this.options.aclist.currentIndex = index;
-        }
-      });
-      this.options.aclist.container.on("mouseleave.richAutocomplete", "." + classes.listItemClass, function(event) {
-        var elem;
-        elem = $(event.currentTarget);
-        return elem.removeClass(classes.active);
-      });
-      this.options.aclist.container.on("click.richAutocomplete", "." + classes.createElemClass, function(event) {
-        if (_this.options.createItemAvailable) {
-          return _this._createNewItem(_this.options.typeInput.val());
-        }
-      });
-      this.options.aclist.container.on("mouseleave.richAutocomplete", "." + classes.createElemClass, function(event) {
-        var elem;
-        elem = $(event.currentTarget);
-        elem.removeClass(classes.active);
-        return _this.options.createItemAvailable = false;
-      });
-      return this.options.aclist.container.on("mouseover.richAutocomplete", "." + classes.createElemClass, function(event) {
-        var elem;
-        elem = $(event.currentTarget);
-        elem.addClass(classes.active);
-        return _this.options.createItemAvailable = true;
-      });
+      return this.requestCache.set(value, data);
     };
 
     Plugin.prototype._onLoadList = function(data, value) {
       var alreadySelected,
         _this = this;
-      alreadySelected = this.options.element.data("data");
+      alreadySelected = this.getValue();
       data = _.filter(data, function(item) {
         var result;
         result = true;
@@ -959,20 +975,21 @@
         }
         if (this.options.aclist.currentList.length === 0) {
           if (this.options.additionalMode === AdditionalMode.EMPTY) {
-            return this._renderEmptyElem(value);
+            this._renderEmptyElem(value);
           } else if (this.options.additionalMode === AdditionalMode.CREATE) {
-            return this._renderCreateElem(value);
+            this._renderCreateElem(value);
           }
         } else {
-          return this.moveToNextInList();
+          this.moveToNextInList();
         }
       } else {
         if (this.options.additionalMode === AdditionalMode.EMPTY) {
-          return this._renderEmptyElem(value);
+          this._renderEmptyElem(value);
         } else if (this.options.additionalMode === AdditionalMode.CREATE) {
-          return this._renderCreateElem(value);
+          this._renderCreateElem(value);
         }
       }
+      return this._openContainer();
     };
 
     Plugin.prototype._renderEmptyElem = function(value) {
