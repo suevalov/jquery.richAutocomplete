@@ -57,7 +57,7 @@ defaults =
 	cache: false
 	cacheLimit: 20
 	highlightResults: true
-	maxViewedCount: 10
+	maxViewedCount: false
 	placeholder: false
 	
 	groups: null
